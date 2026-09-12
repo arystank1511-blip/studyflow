@@ -162,6 +162,21 @@ RU = {
 }
 
 RU.update({
+    "Create account": "Регистрация",
+    "Create your study space.": "Учёба начинается с плана.",
+    "Welcome back.": "С возвращением.",
+    "Account access": "Вход и регистрация",
+    "Password": "Пароль",
+    "Repeat password": "Повторите пароль",
+    "Email not verified": "Почта не проверена",
+    "Create an account with your email and a strong password.": "Создайте аккаунт: укажите свою почту и надёжный пароль.",
+    "Sign in with your email and password.": "Войдите по почте и паролю.",
+    "Use at least 15 characters and at most 72 UTF-8 bytes.": "Минимум 15 символов, максимум 72 байта UTF-8 (например, до 72 латинских букв или 36 русских).",
+    "Enter the password you chose when registering.": "Введите пароль, который указали при регистрации.",
+    "Email ownership is not verified. Use your own address. No confirmation or password-reset emails are sent. Save your password in a password manager.": "Владение почтой не проверяется. Указывайте свой адрес. Письма подтверждения и восстановления не отправляются. Сохраните пароль в менеджере паролей.",
+    "Passwords do not match.": "Пароли не совпадают.",
+    "Email or password is incorrect.": "Неверная почта или пароль.",
+    "Could not create an account. Try signing in or use another email.": "Не удалось создать аккаунт. Попробуйте войти или укажите другую почту.",
     "Delete task": "Удалить задачу",
     "This removes the task from your plan. This action cannot be undone.": "Задача будет удалена из плана. Это действие нельзя отменить.",
     "Tasks & plan": "Задачи и план",

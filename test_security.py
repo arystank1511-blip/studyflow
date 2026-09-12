@@ -1,5 +1,4 @@
 """Offline security regression tests. Real Supabase RLS needs the separate SQL test."""
-import time
 import unittest
 from unittest.mock import patch
 
@@ -65,7 +64,7 @@ class CloudSecurityTests(unittest.TestCase):
             remote.assert_not_called()
 
     def test_all_post_forms_require_csrf(self):
-        for path in ("/login", "/login/verify", "/logout", "/language", "/tasks", "/tasks/1/edit", "/tasks/1/status", "/tasks/1/delete"):
+        for path in ("/login", "/register", "/login/verify", "/logout", "/language", "/tasks", "/tasks/1/edit", "/tasks/1/status", "/tasks/1/delete"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.post(path).status_code, 400)
                 self.assertEqual(self.client.post(path, data={"csrf_token": "подделка"}).status_code, 400)
@@ -96,17 +95,18 @@ class CloudSecurityTests(unittest.TestCase):
         with patch("cloud.api", return_value={"id": ALICE, "email": "unverified@example.com"}):
             self.assertEqual(self.client.get("/").location, "/login")
 
-    def test_login_verify_rotates_csrf_and_hides_tokens(self):
-        with patch("cloud.api", return_value={}):
-            self.assertEqual(self.post("/login", email="student@example.com").location, "/login/verify")
+    def test_password_login_rotates_csrf_and_hides_secrets(self):
         with self.client.session_transaction() as state:
             state["task_draft"] = {"title": "Old account data"}
         app.config["SESSION_COOKIE_SECURE"] = True
         with patch("cloud.api", side_effect=[{"access_token": "alice-token", "refresh_token": "private-refresh"},
-                                             {"id": ALICE, "email": "student@example.com", "email_confirmed_at": "yes"}]):
-            response = self.post("/login/verify", code="123456")
+                                             {"id": ALICE, "email": "student@example.com", "email_confirmed_at": "yes"}]) as remote:
+            response = self.post("/login", email="Student@example.com", password="long-test-password")
+            self.assertEqual(remote.call_args_list[0].args, ("POST", "/auth/v1/token"))
+            self.assertEqual(remote.call_args_list[0].kwargs["params"], {"grant_type": "password"})
         self.assertEqual(response.location, "/")
         self.assertNotIn(b"private-refresh", response.data)
+        self.assertNotIn(b"long-test-password", response.data)
         auth_cookies = [item for item in response.headers.getlist("Set-Cookie") if item.startswith("sf_")]
         self.assertEqual(len(auth_cookies), 2)
         for cookie in auth_cookies:
@@ -117,22 +117,55 @@ class CloudSecurityTests(unittest.TestCase):
             self.assertNotIn("task_draft", state)
             self.assertNotIn("otp_email", state)
             self.assertNotEqual(state["csrf_token"], self.csrf)
+            self.assertNotIn("long-test-password", str(dict(state)))
 
-    def test_otp_validation_cooldown_and_generic_error(self):
+    def test_password_validation_and_generic_errors(self):
         with patch("cloud.api") as remote:
             self.assertEqual(self.post("/login", email="invalid").status_code, 400)
-            remote.assert_not_called()
-        with patch("cloud.api", return_value={}):
-            self.post("/login", email="student@example.com")
-        with patch("cloud.api") as remote:
-            self.assertEqual(self.post("/login", email="another@example.com").status_code, 400)
-            self.assertEqual(self.post("/login/verify", code="abc").status_code, 400)
+            for password in ("", "short", "a" * 73, "я" * 37):
+                self.assertEqual(self.post("/register", email="student@example.com", password=password, password_confirm=password).status_code, 400)
+            self.assertEqual(self.post("/register", email="student@example.com", password="long-test-password", password_confirm="not-the-same-password").status_code, 400)
             remote.assert_not_called()
         with patch("cloud.api", side_effect=CloudError(422)):
-            self.assertIn(b"invalid or expired", self.post("/login/verify", code="123456").data)
+            response = self.post("/login", email="student@example.com", password="secret-test-value")
+            self.assertIn(b"Email or password is incorrect", response.data)
+            self.assertNotIn(b"secret-test-value", response.data)
+        with patch("cloud.api", side_effect=CloudError(429)):
+            self.assertEqual(self.post("/login", email="student@example.com", password="secret-test-value").status_code, 429)
+        with patch("cloud.api", side_effect=CloudError(503)):
+            self.assertEqual(self.post("/register", email="student@example.com", password="secret-test-value", password_confirm="secret-test-value").status_code, 503)
+
+    def test_signup_uses_password_provider_without_email_calls(self):
+        with patch("cloud.api", side_effect=[{"access_token": "alice-token", "refresh_token": "private-refresh"},
+                                             {"id": ALICE, "email": "student@example.com", "email_confirmed_at": "auto-confirmed"}]) as remote:
+            response = self.post("/register", email=" Student@example.com ", password="test phrase with spaces", password_confirm="test phrase with spaces", user_id=BOB)
+        self.assertEqual(response.location, "/")
+        self.assertEqual(remote.call_args_list[0].args, ("POST", "/auth/v1/signup"))
+        self.assertEqual(remote.call_args_list[0].kwargs["data"], {"email": "student@example.com", "password": "test phrase with spaces"})
+        self.assertEqual(len(remote.call_args_list), 2)
         with self.client.session_transaction() as state:
-            state["otp_sent_at"] = time.time() - 601
-        self.assertEqual(self.client.get("/login/verify").location, "/login")
+            self.assertNotIn("test phrase with spaces", str(dict(state)))
+
+    def test_signup_without_session_or_duplicate_fails_closed(self):
+        for result in ({"user": {"id": ALICE}}, {}, {"access_token": "alice-token"}):
+            with patch("cloud.api", return_value=result):
+                response = self.post("/register", email="student@example.com", password="secret-test-value", password_confirm="secret-test-value")
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(any(c.startswith("sf_") for c in response.headers.getlist("Set-Cookie")))
+        with patch("cloud.api", side_effect=CloudError(422)):
+            self.assertEqual(self.post("/register", email="student@example.com", password="secret-test-value", password_confirm="secret-test-value").status_code, 400)
+
+    def test_password_forms_localization_and_retired_otp(self):
+        for route in ("/login", "/register"):
+            response = self.client.get(route)
+            self.assertIn(b'type="password"', response.data)
+            self.assertIn(b"Email ownership is not verified", response.data)
+            self.assertNotIn(b"one-time-code", response.data)
+            self.assertIn("Пароль".encode(), self.client.get(route, headers={"Accept-Language": "ru"}).data)
+        with patch("cloud.api") as remote:
+            self.assertEqual(self.client.get("/login/verify").location, "/login")
+            self.assertEqual(self.post("/login/verify", code="123456").location, "/login")
+            remote.assert_not_called()
 
     def test_refresh_and_logout(self):
         self.sign_in(token="expired")

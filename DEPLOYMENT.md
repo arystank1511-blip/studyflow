@@ -7,12 +7,12 @@ Do not treat offline mocks as proof that a real database has RLS enabled.
 
 1. Create a project in your own account. Choose a suitable region and store the database password in your password manager, not in Git or chat. Stay on a free plan unless you decide otherwise.
 2. Execute `supabase/schema.sql` once in the SQL Editor. It creates a dedicated table, constraints, and owner-only row-level policies. It intentionally fails if that table already exists, instead of overwriting data.
-3. Keep email confirmation enabled. In Authentication → Email Templates → Magic Link, include the OTP token, for example: `<p>Your StudyFlow sign-in code: {{ .Token }}</p>`. This app uses a code, not a link callback.
-4. Set OTP expiry to 600 seconds and review Auth rate limits. Do not disable provider rate limiting. Configure a verified custom SMTP sender before accepting public registrations; the default sender is restricted to project team addresses and has low limits.
+3. This deployment intentionally uses email/password without email verification, explicitly approved by the owner. In Authentication → Sign In / Providers disable **Confirm email**, keep **Email** enabled, and keep anonymous sign-ins and manual identity linking disabled. A Supabase `email_confirmed_at` value is automatically assigned in this mode and does not establish mailbox ownership. Do not enable social login or merge identities by email without a separate verification/migration design.
+4. Set minimum password length to 15 and require the current password for updates in the Email provider. Keep provider Auth rate limits enabled. No SMTP is required for these password-only signup/login routes. Confirmation, magic links and password-recovery mail are not offered; do not promise account recovery based solely on an unverified email address.
 5. Get the project URL and **publishable** key (or legacy **anon** key). This app deliberately rejects a service-role/secret key. The service-role key bypasses RLS and must not be used.
-6. Set the Auth Site URL to the final HTTPS Vercel URL. No wildcard redirect URLs are needed for email-code login.
+6. Set the Auth Site URL to the final HTTPS Vercel URL. No wildcard redirect URLs are needed for password login.
 
-Passwords are not stored by StudyFlow. Supabase verifies email codes and manages auth sessions. Anyone with access to the mailbox can sign in; protect that mailbox with MFA.
+StudyFlow forwards passwords only to Supabase over HTTPS; Supabase manages password hashing and auth sessions. Passwords never enter the application database, cookies, templates or logs. There is no self-service recovery in this version. Anyone can register an unused address they do not own, so treat it only as a login identifier.
 
 ## 2. Local cloud smoke test
 
@@ -39,18 +39,18 @@ Missing configuration fails closed: private routes return 503, never the old SQL
 ## 4. Required pre-publication checks
 
 - Sign in with two staging test accounts. Privately set `TEST_ACCESS_TOKEN_A` and `TEST_ACCESS_TOKEN_B` to their access tokens, then run `python verify_cloud.py`. This checks the actual database without application owner filters and cleans up its synthetic tasks. Never log or commit those tokens.
-- Verify email delivery and rejected expired/reused codes. Test logout followed by another account's login, including on a phone.
+- Verify signup, duplicate signup, wrong passwords, password length enforcement, provider throttling, and logout followed by another account's login, including on a phone. Confirm there are no OTP, social login or misleading password-recovery buttons.
 - Confirm HTTPS, private/no-store HTML responses, HttpOnly/Secure/SameSite cookies, no authentication tokens in HTML, and no publicly readable `.env` or database files.
 - Verify Tasks & plan, Progress, the legacy `/planner` alias, and status forms with CSP enabled. Inline JavaScript handlers are not allowed.
 - Review Supabase Security Advisor. Confirm RLS on `studyflow_tasks`, no anonymous grants, no extra permissive policies, and no service-role key in Vercel or frontend code.
-- Configure Vercel Firewall rate limits for `/login` and `/login/verify`, provider Auth quotas, spending alerts, and signup monitoring. Provider email/OTP rate limits are essential; the signed-cookie resend cooldown is UX only and can be bypassed by clearing cookies. An attacker can otherwise exhaust shared email limits and delay legitimate sign-ins.
+- Configure Vercel Firewall rate limits for `/login` and `/register`, provider Auth quotas, spending alerts, and signup monitoring. Provider-side password/signup throttling is essential: process-local or cookie limits would be bypassable and would not protect Supabase's direct Auth API.
 - This version does not integrate CAPTCHA. For a broadly promoted public site, add Supabase-supported CAPTCHA before removing deployment protection; do not enable it without adding the matching client token flow.
 - Select and test a backup/restore policy supported by your database plan. Account deletion/export and operational alerting remain follow-up work.
 
 ## References
 
 - [Vercel Flask deployment](https://vercel.com/docs/frameworks/backend/flask)
-- [Supabase passwordless email](https://supabase.com/docs/guides/auth/auth-email-passwordless)
+- [Supabase password authentication](https://supabase.com/docs/guides/auth/passwords)
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Supabase Auth rate limits](https://supabase.com/docs/guides/auth/rate-limits)
 - [Supabase SMTP limits](https://supabase.com/docs/guides/auth/auth-smtp)

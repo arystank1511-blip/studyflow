@@ -26,7 +26,7 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Russian / English switch, remembered for one year; first visit follows the browser language
 - Localized dates, task statuses, validation messages, and deletion confirmation; user-entered task text stays unchanged
 - Keyboard-accessible task dialog, inline validation, and protected POST forms
-- Cloud mode: Supabase PostgreSQL, email-code sign-in, account-owned tasks, and logout
+- Cloud mode: Supabase PostgreSQL, email/password registration and sign-in, account-owned tasks, and logout
 - Defense in depth: owner filters plus database RLS, CSRF checks, secure production cookies, private response caching, and a restrictive script policy
 
 ## Tech stack
@@ -68,7 +68,7 @@ Tests use temporary databases and cover task creation, status updates, deletion,
 
 StudyFlow has two deliberately separate modes. Local mode keeps the existing SQLite workspace on loopback only. Cloud mode requires Supabase Auth and PostgreSQL with the supplied RLS policies. On Vercel, cloud mode is mandatory and missing configuration fails closed. Publishing the source to GitHub does not host the backend. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup and required live checks; see [SECURITY.md](SECURITY.md) for tested protections and limits.
 
-Copy `.env.example` to a private `.env` for local cloud configuration. Never commit real secrets. Cloud registration/login uses a one-time email code; public delivery requires a configured email sender.
+Copy `.env.example` to a private `.env` for local cloud configuration. Never commit real secrets. Cloud registration/login uses email and password through Supabase Auth. Email confirmation is intentionally disabled at the owner's request: addresses are unverified identifiers, not proof of mailbox ownership. No confirmation or password-reset emails are offered. Use your own address and save your password in a password manager. New passwords require at least 15 characters and no more than 72 UTF-8 bytes.
 
 - `STUDYFLOW_DATABASE`: optional SQLite path (default: `studyflow.db` beside `app.py`).
 - `STUDYFLOW_SECRET_KEY`: optional stable session secret, supplied through the environment. Otherwise a fresh secret is generated at startup and open forms must be reloaded after a restart.

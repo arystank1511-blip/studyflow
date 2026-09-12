@@ -25,7 +25,7 @@
   </aside>
   <main class="dashboard" id="main-content" tabindex="-1">
     <div class="account-strip">
-      {% if g.user %}<span>{{ g.user.email }}</span><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">{{ t('Sign out') }}</button></form>
+      {% if g.user %}<span>{{ g.user.email }} · {{ t('Email not verified') }}</span><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">{{ t('Sign out') }}</button></form>
       {% else %}<span>{{ t('Local workspace · only on this computer') }}</span><a href="{{ url_for('login') }}">{{ t('Cloud sign-in') }}</a>{% endif %}
     </div>
     {% with messages = get_flashed_messages(with_categories=true) %}

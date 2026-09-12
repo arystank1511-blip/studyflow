@@ -5,7 +5,6 @@ import base64
 import json
 import re
 import secrets
-import time
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -59,6 +58,7 @@ def api(method, path, *, token=None, data=None, params=None, headers=None):
 
 def authenticated_user(token):
     user = api("GET", "/auth/v1/user", token=token)
+    # With Confirm Email disabled, this is account eligibility, NOT mailbox proof.
     if not isinstance(user, dict) or not user.get("email_confirmed_at"):
         raise CloudError(401)
     try:
@@ -84,7 +84,7 @@ def load_identity():
                                         request.host.split(":")[0] not in {"127.0.0.1", "localhost"}):
             abort(403)
         return
-    public = {"static", "login", "verify_login", "change_language", "health"}
+    public = {"static", "login", "register", "verify_login", "change_language", "health"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
@@ -144,8 +144,7 @@ def register_auth(app):
     app.before_request(load_identity)
     app.after_request(secure_response)
 
-    @app.route("/login", methods=["GET", "POST"])
-    def login():
+    def password_form(signup=False):
         error = None
         email = ""
         ready = app.config["CLOUD_MODE"] and app.config["CLOUD_READY"]
@@ -153,45 +152,50 @@ def register_auth(app):
             if not ready:
                 abort(503)
             email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
             if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
                 error = "Enter a valid email address."
-            elif time.time() - session.get("otp_sent_at", 0) < 60:
-                error = "Wait a minute before requesting another code."
+            elif not password or len(password.encode("utf-8")) > 72 or (signup and len(password) < 15):
+                error = "Use at least 15 characters and at most 72 UTF-8 bytes." if signup else "Email or password is incorrect."
+            elif signup and not secrets.compare_digest(password.encode("utf-8"), request.form.get("password_confirm", "").encode("utf-8")):
+                error = "Passwords do not match."
             else:
                 try:
-                    # Provider enforces email quotas/rate limits; no local-only security limiter.
-                    api("POST", "/auth/v1/otp", data={"email": email, "create_user": True})
-                    session["otp_email"] = email
-                    session["otp_sent_at"] = time.time()
-                    return redirect(url_for("verify_login"))
-                except CloudError as exc:
-                    error = "Too many attempts. Please try again later." if exc.status == 429 else "Could not send a code. Please try again later."
-        return render_template("auth.html", step="email", error=error, email=email, ready=ready), 400 if error else 200
-
-    @app.route("/login/verify", methods=["GET", "POST"])
-    def verify_login():
-        email = session.get("otp_email")
-        if not email or time.time() - session.get("otp_sent_at", 0) > 600:
-            session.pop("otp_email", None)
-            return redirect(url_for("login"))
-        error = None
-        if request.method == "POST":
-            code = request.form.get("code", "").strip()
-            if not re.fullmatch(r"[0-9]{6,10}", code):
-                error = "The code is invalid or expired. Request a new code."
-            else:
-                try:
-                    result = api("POST", "/auth/v1/verify", data={"email": email, "token": code, "type": "email"})
-                    accept_tokens(result)
-                    session.clear()  # Rotate CSRF and remove drafts from any previous account.
+                    # Passwords go only to Supabase over HTTPS, never into our
+                    # database, session, logs, templates, or task metadata.
+                    result = api("POST", "/auth/v1/signup" if signup else "/auth/v1/token",
+                                 params=None if signup else {"grant_type": "password"},
+                                 data={"email": email, "password": password})
+                    accept_tokens(result)  # Missing session => fail closed.
+                    session.clear()
                     session["csrf_token"] = secrets.token_hex(32)
                     flash("You are signed in.", "success")
                     return redirect(url_for("index"))
                 except CloudError as exc:
-                    error = ("Too many attempts. Please try again later." if exc.status == 429 else
-                             "The code is invalid or expired. Request a new code." if exc.status in (400, 401, 403, 422) else
-                             "Sign-in is temporarily unavailable. Please try again later.")
-        return render_template("auth.html", step="code", error=error, email=email, ready=True), 400 if error else 200
+                    if exc.status == 429:
+                        error = "Too many attempts. Please try again later."
+                    elif exc.status in (400, 401, 403, 422):
+                        error = "Could not create an account. Try signing in or use another email." if signup else "Email or password is incorrect."
+                    else:
+                        error = "Sign-in is temporarily unavailable. Please try again later."
+                    status = 429 if exc.status == 429 else 400 if exc.status in (400, 401, 403, 422) else 503
+                    return render_template("auth.html", signup=signup, error=error, email=email, ready=ready), status
+        return render_template("auth.html", signup=signup, error=error, email=email, ready=ready), 400 if error else 200
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        return password_form()
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        return password_form(signup=True)
+
+    @app.route("/login/verify", methods=["GET", "POST"])
+    def verify_login():
+        # Retire old bookmarks without sending emails.
+        session.pop("otp_email", None)
+        session.pop("otp_sent_at", None)
+        return redirect(url_for("login"))
 
     @app.post("/logout")
     def logout():

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ t('Sign in') }} · StudyFlow{% endblock %}
+{% block title %}{{ t('Create account') if signup else t('Sign in') }} · StudyFlow{% endblock %}
 {% block content %}
 <main class="auth-shell" id="main-content">
   <div class="auth-heading">
@@ -11,28 +11,31 @@
   </div>
   <section class="auth-card" aria-labelledby="auth-title">
     <p class="eyebrow">{{ t('YOUR PERSONAL STUDY SPACE') }}</p>
-    <h1 id="auth-title">{{ t('Check your inbox') if step == 'code' else t('A little focus. A lot of progress.') }}</h1>
+    <h1 id="auth-title">{{ t('Create your study space.') if signup else t('Welcome back.') }}</h1>
     {% if not ready %}
       <p>{{ t('Cloud sign-in is not connected yet. Your existing tasks remain on this computer.') }}</p>
       <a class="primary" href="{{ url_for('index') }}">{{ t('Return to dashboard') }}</a>
     {% else %}
-      <p>{{ t('Enter the one-time code sent to your email.') if step == 'code' else t('Sign in or create an account with your email. No password to remember.') }}</p>
-      {% if error %}<p class="flash error" role="alert">{{ t(error) }}</p>{% endif %}
-      <form method="post" class="auth-form" action="{{ url_for('verify_login') if step == 'code' else url_for('login') }}">
+      <nav class="auth-tabs" aria-label="{{ t('Account access') }}">
+        <a href="{{ url_for('login') }}" {% if not signup %}aria-current="page"{% endif %}>{{ t('Sign in') }}</a>
+        <a href="{{ url_for('register') }}" {% if signup %}aria-current="page"{% endif %}>{{ t('Create account') }}</a>
+      </nav>
+      <p>{{ t('Create an account with your email and a strong password.') if signup else t('Sign in with your email and password.') }}</p>
+      {% if error %}<p class="flash error" id="auth-error" role="alert">{{ t(error) }}</p>{% endif %}
+      <form method="post" class="auth-form" action="{{ url_for('register') if signup else url_for('login') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        {% if step == 'code' %}
-          <p class="auth-email">{{ email }}</p>
-          <label for="auth-code">{{ t('Email code') }}</label>
-          <input id="auth-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required {% if error %}aria-invalid="true"{% endif %}>
-          <button class="primary" type="submit">{{ t('Sign in') }} <span aria-hidden="true">→</span></button>
-          <a class="auth-link" href="{{ url_for('login') }}">{{ t('Use another email or request a new code') }}</a>
-        {% else %}
-          <label for="auth-email">{{ t('Email address') }}</label>
-          <input id="auth-email" type="email" name="email" autocomplete="email" maxlength="254" value="{{ email }}" placeholder="you@example.com" required {% if error %}aria-invalid="true"{% endif %}>
-          <button class="primary" type="submit">{{ t('Send a sign-in code') }} <span aria-hidden="true">→</span></button>
+        <label for="auth-email">{{ t('Email address') }}</label>
+        <input id="auth-email" type="email" name="email" autocomplete="username" maxlength="254" value="{{ email }}" placeholder="you@example.com" required>
+        <label for="auth-password">{{ t('Password') }}</label>
+        <input id="auth-password" type="password" name="password" autocomplete="{{ 'new-password' if signup else 'current-password' }}" {% if signup %}minlength="15"{% endif %} maxlength="72" required aria-describedby="password-help{% if error %} auth-error{% endif %}">
+        <small id="password-help">{{ t('Use at least 15 characters and at most 72 UTF-8 bytes.') if signup else t('Enter the password you chose when registering.') }}</small>
+        {% if signup %}
+          <label for="auth-password-confirm">{{ t('Repeat password') }}</label>
+          <input id="auth-password-confirm" type="password" name="password_confirm" autocomplete="new-password" minlength="15" maxlength="72" required>
         {% endif %}
+        <button class="primary" type="submit">{{ t('Create account') if signup else t('Sign in') }} <span aria-hidden="true">→</span></button>
       </form>
-      <p class="auth-footnote">{{ t('Your tasks belong to your account. Never share sign-in codes.') }}</p>
+      <p class="auth-footnote">{{ t('Email ownership is not verified. Use your own address. No confirmation or password-reset emails are sent. Save your password in a password manager.') }}</p>
     {% endif %}
   </section>
 </main>

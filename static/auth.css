@@ -12,6 +12,7 @@
 .auth-form .primary{min-height:50px;justify-content:space-between;margin-top:8px}
 .auth-form .auth-email{overflow-wrap:anywhere;margin:0;font-weight:600}
 .auth-link{color:#087044;font-size:13px;margin-top:8px;text-underline-offset:4px}
+.auth-tabs{display:flex;gap:6px;padding:5px;background:#edf5ef;border-radius:12px;flex-wrap:wrap}.auth-tabs a{flex:1;min-height:44px;display:grid;place-items:center;padding:10px;color:#335f4c;text-decoration:none;border-radius:8px;font-weight:600}.auth-tabs a[aria-current=page]{background:#146841;color:white}.auth-tabs a:focus-visible{outline:3px solid #419869;outline-offset:2px}.auth-form small{color:#51665e;line-height:1.5}
 .auth-card .auth-footnote{font-size:12px;margin:24px 0 0;padding-top:20px;border-top:1px solid #e4ebe7}
 .account-strip{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px;font-size:12px;color:#48645a}
 .account-strip span{overflow-wrap:anywhere;min-width:0}.account-strip button{font:inherit;cursor:pointer;border:1px solid #b9cfc2;background:white;border-radius:8px;padding:10px 14px;color:#14513a;min-height:44px}

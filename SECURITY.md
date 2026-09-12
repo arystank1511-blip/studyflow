@@ -2,14 +2,22 @@
 
 ## Status
 
-Cloud integration is implemented, but provider provisioning, real email delivery,
-database policy execution, real-account isolation checks, and a live Vercel deployment
-still require account setup. Do not advertise this as a penetration-tested production service.
+Supabase is provisioned and the task schema has been executed. Database checks confirmed
+enabled/forced RLS, four policies, no anonymous SELECT/INSERT, and no owner UPDATE grant.
+Real-account isolation tests and a live Vercel deployment still require setup.
+Do not advertise this as a penetration-tested production service.
 
 ## Implemented protections
 
-- Auth is delegated to Supabase email OTP. StudyFlow does not store passwords.
-- Auth access tokens are verified against `/auth/v1/user`; an unverified email is rejected.
+- Auth is delegated to Supabase email/password. Passwords are forwarded over HTTPS and
+  are never stored in the StudyFlow database, session, logs or rendered HTML.
+- Email confirmation is intentionally disabled with explicit owner consent. Email addresses
+  are unverified login identifiers; Supabase auto-confirms them internally. A timestamp is
+  not proof of mailbox ownership. Account identity is always the server-validated UUID,
+  never the email address. No SMTP, OTP, social sign-in or recovery flow is offered.
+- Access tokens are verified against `/auth/v1/user`. New passwords require at least
+  15 characters and at most 72 UTF-8 bytes to avoid bcrypt truncation. The provider's
+  minimum length is also 15; changing a password requires the current password.
 - Access and rotating refresh tokens are HttpOnly cookies. Production uses Secure and
   SameSite=Lax; tokens never enter templates, localStorage, query URLs, or application logs.
 - Login clears previous drafts and rotates the CSRF token. Logout revokes the current
@@ -31,8 +39,8 @@ still require account setup. Do not advertise this as a penetration-tested produ
 
 ## Verification
 
-- 40 offline regression tests: task flows, unified calendar/list navigation, RU/EN, CSRF including malformed Unicode,
-  verified identity, expired sessions, OTP validation, cookie flags, account owner filters,
+- 43 offline regression tests: task flows, unified calendar/list navigation, RU/EN, CSRF including malformed Unicode,
+  server-validated identity, expired sessions, password signup/login and validation, cookie flags, account owner filters,
   foreign IDs, escaping, unsafe redirects, host validation, and cloud-outage fail-closed behavior.
 - Cloud tests mock Supabase; they test application behavior, not the deployed RLS engine.
   Run `verify_cloud.py` with two staging accounts to test real policies before publication.
@@ -43,11 +51,14 @@ still require account setup. Do not advertise this as a penetration-tested produ
 
 ## Deployment and remaining risks
 
-Follow `DEPLOYMENT.md`. Real RLS, auth delivery, Secure cookies on HTTPS, and account switching
-must be tested against the deployed service. Configure an SMTP sender, provider OTP quotas,
+Follow `DEPLOYMENT.md`. Real RLS, password authentication, Secure cookies on HTTPS, and account switching
+must be tested against the deployed service. Configure provider signup/password quotas,
 Vercel rate limits, spending alerts, backups, and preview isolation. This version has no CAPTCHA
 integration or per-account task storage quota; do not broadly open signup without anti-abuse
-controls. Cookie-based resend cooldown is UX only, not a security rate limiter.
+controls. Supabase's direct Auth API must also remain protected by provider throttling.
+Unverified addresses permit impersonation and pre-registration of someone else's address.
+Never merge social identities, add email-based trust, or enable password recovery later
+without a reviewed mailbox-verification and existing-account migration policy.
 
 The CSP still permits inline **styles** for task/progress widths (not inline JavaScript).
 The app does not encrypt task text end-to-end: trusted database/project administrators can read it.

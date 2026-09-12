@@ -10,8 +10,9 @@ from app import app, course_progress, get_db, init_db, task_metrics, urgency_key
 class StudyFlowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.original_db = app.config["DATABASE"]
-        app.config.update(TESTING=True, DATABASE=str(Path(self.temp.name) / "test.db"))
+        self.original_config = dict(app.config)
+        app.config.update(TESTING=True, CLOUD_MODE=False, SESSION_COOKIE_SECURE=False,
+                          TRUSTED_HOSTS=["localhost", "127.0.0.1"], DATABASE=str(Path(self.temp.name) / "test.db"))
         init_db()
         self.client = app.test_client()
         self.client.get("/")
@@ -19,7 +20,8 @@ class StudyFlowTests(unittest.TestCase):
             self.token = session["csrf_token"]
 
     def tearDown(self):
-        app.config["DATABASE"] = self.original_db
+        app.config.clear()
+        app.config.update(self.original_config)
         self.temp.cleanup()
 
     def post(self, path, **data):
