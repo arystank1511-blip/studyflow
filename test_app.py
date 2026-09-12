@@ -4,7 +4,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from app import app, course_progress, get_db, init_db, task_metrics
+from app import app, course_progress, get_db, init_db, task_metrics, urgency_key, weekly_load
 
 
 class StudyFlowTests(unittest.TestCase):
@@ -113,6 +113,118 @@ class StudyFlowTests(unittest.TestCase):
         self.post("/tasks/1/status", status="bogus", next="planner")
         self.assertEqual(self.tasks()[0]["status"], "To do")
         self.assertIn(b"Invalid task status", self.client.get("/planner").data)
+
+    def test_edit_keeps_status_and_updates_course_progress(self):
+        self.create()
+        self.post("/tasks/1/status", status="Done")
+        response = self.post("/tasks/1/edit?view=done&course=Math", title="New title", course="Math", due_date="2030-01-01", priority="High", notes="Bring notes", next="dashboard")
+        self.assertIn("view=done", response.location)
+        self.assertIn("course=Math", response.location)
+        task = self.tasks()[0]
+        self.assertEqual((task["title"], task["course"], task["status"], task["priority"]), ("New title", "Math", "Done", "High"))
+        self.assertEqual(course_progress(self.tasks())[0]["percent"], 100)
+
+    def test_invalid_edit_does_not_write(self):
+        self.create()
+        response = self.post("/tasks/1/edit", title="Changed", course="Math", due_date="bad", next="planner")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'aria-invalid="true"', response.data)
+        self.assertIn(b'value="Changed"', response.data)
+        self.assertEqual(self.tasks()[0]["title"], "Database assignment")
+        self.assertEqual(self.client.get("/tasks/999/edit").status_code, 404)
+        self.assertEqual(self.client.post("/tasks/1/edit").status_code, 400)
+
+    def test_date_views_exclude_done_and_respect_boundaries(self):
+        today = date.today()
+        for title, offset in [("Late", -1), ("Today task", 0), ("Week end", 6), ("Later task", 7)]:
+            self.create(title=title, due_date=(today + timedelta(days=offset)).isoformat())
+        from unittest.mock import patch
+        import app as module
+        original = module.render_template
+        contexts = []
+        def capture(template, **context):
+            contexts.append(context)
+            return original(template, **context)
+        with patch.object(module, "render_template", side_effect=capture):
+            self.client.get("/?view=week")
+            self.assertEqual([t["title"] for t in contexts[-1]["tasks"]], ["Today task", "Week end"])
+            self.client.get("/?view=overdue")
+            self.assertEqual([t["title"] for t in contexts[-1]["tasks"]], ["Late"])
+            self.post("/tasks/2/status", status="Done")
+            self.client.get("/?view=today")
+            self.assertEqual(contexts[-1]["tasks"], [])
+            self.client.get("/?day=not-a-date")
+            self.assertEqual(contexts[-1]["day"], "")
+
+    def test_urgency_and_weekly_load(self):
+        self.create(title="Low priority", priority="Low")
+        self.create(title="High priority", priority="High")
+        self.assertEqual(sorted(self.tasks(), key=urgency_key)[0]["title"], "High priority")
+        self.assertEqual(weekly_load(self.tasks(), date.today())[0]["count"], 2)
+        self.post("/tasks/2/status", status="Done")
+        self.assertEqual(weekly_load(self.tasks(), date.today())[0]["count"], 1)
+
+    def test_filters_survive_task_actions(self):
+        self.create()
+        response = self.post("/tasks/1/status?view=today&course=Computer+Science&q=Database", status="In progress", next="dashboard")
+        self.assertIn("view=today", response.location)
+        self.assertIn("course=Computer+Science", response.location)
+        self.assertIn("q=Database", response.location)
+        self.assertEqual(self.client.get("/tasks/1/edit?next=planner").status_code, 200)
+
+    def test_course_attention_uses_overdue_work(self):
+        self.create(course="A course")
+        self.create(course="Z course", due_date=(date.today() - timedelta(days=1)).isoformat())
+        self.assertEqual(course_progress(self.tasks())[0]["name"], "Z course")
+        self.assertEqual(course_progress(self.tasks())[0]["overdue"], 1)
+
+    def test_language_switch_preserves_page_and_filters(self):
+        response = self.post("/language", language="ru", return_to="/?view=week&course=Math")
+        self.assertEqual(response.location, "/?view=week&course=Math")
+        self.assertIn("Max-Age=31536000", response.headers["Set-Cookie"])
+        for path in ("/", "/planner", "/progress"):
+            text = self.client.get(path).get_data(as_text=True)
+            self.assertIn('<html lang="ru">', text)
+            self.assertIn("Новая задача", text)
+        self.post("/language", language="en", return_to="/planner")
+        self.assertIn(b'<html lang="en">', self.client.get("/planner").data)
+        self.assertIn(b"Academic planner", self.client.get("/planner").data)
+
+    def test_language_detection_and_cookie_precedence(self):
+        response = self.client.get("/", headers={"Accept-Language": "ru-RU,ru;q=0.9,en;q=0.5"})
+        self.assertIn(b'<html lang="ru">', response.data)
+        self.client.set_cookie("studyflow_language", "en")
+        response = self.client.get("/", headers={"Accept-Language": "ru"})
+        self.assertIn(b'<html lang="en">', response.data)
+
+    def test_russian_forms_keep_database_enums_and_user_text(self):
+        self.client.set_cookie("studyflow_language", "ru")
+        self.create(title="Prepare essay", course="History", priority="High")
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("Prepare essay", page)
+        self.assertIn("History", page)
+        self.assertIn('value="In progress"', page)
+        self.assertIn("В работе", page)
+        self.assertIn("Задача добавлена.", page)
+        self.post("/tasks/1/status", status="In progress")
+        self.assertEqual(self.tasks()[0]["status"], "In progress")
+        self.create(due_date="wrong")
+        self.assertIn("Выберите корректную дату.", self.client.get("/").get_data(as_text=True))
+        self.assertIn("Страница не найдена", self.client.get("/missing").get_data(as_text=True))
+
+    def test_language_endpoint_validates_redirect_and_csrf(self):
+        self.assertEqual(self.client.post("/language", data={"language": "ru"}).status_code, 400)
+        self.assertEqual(self.post("/language", language="de").status_code, 400)
+        for destination in ("https://example.com", "//example.com", "//[", "/\\example.com"):
+            self.assertEqual(self.post("/language", language="ru", return_to=destination).location, "/")
+
+    def test_russian_task_plurals(self):
+        from flask import g
+        from i18n import task_count
+        with app.test_request_context():
+            g.language = "ru"
+            self.assertEqual([task_count(n) for n in (0, 1, 2, 5, 11, 21, 24)],
+                             ["0 задач", "1 задача", "2 задачи", "5 задач", "11 задач", "21 задача", "24 задачи"])
 
 
 if __name__ == "__main__":

@@ -2,41 +2,56 @@
 {% block content %}
 <div class="app-frame">
   <header class="topbar">
-    <a class="brand" href="{{ url_for('index') }}" aria-label="StudyFlow dashboard"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span translate="no">studyflow</span></a>
-    <div class="topbar-actions"><a class="workspace-label" href="{{ url_for('planner') }}">Academic workspace</a><button class="primary top-action" type="button" data-open-modal>New task <span aria-hidden="true">+</span></button></div>
+    <a class="brand" href="{{ url_for('index') }}" aria-label="{{ t("StudyFlow dashboard") }}"><img class="brand-symbol" src="{{ url_for('static', filename='brand-mark.svg') }}" width="36" height="36" alt=""><span class="brand-wordmark" translate="no">study<span>flow</span></span></a>
+    <div class="topbar-actions"><form class="language-switch" method="post" action="{{ url_for('change_language') }}" aria-label="{{ t('Language') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="return_to" value="{{ request.full_path }}"><button type="submit" name="language" value="ru" lang="ru" aria-label="Русский" aria-pressed="{{ 'true' if lang == 'ru' else 'false' }}">RU</button><button type="submit" name="language" value="en" lang="en" aria-label="English" aria-pressed="{{ 'true' if lang == 'en' else 'false' }}">EN</button></form><button class="primary top-action" type="button" data-open-modal aria-label="{{ t('New task') }}"><span class="new-task-label">{{ t("New task") }}</span> <span aria-hidden="true">+</span></button></div>
   </header>
-  <aside class="sidebar" aria-label="Workspace navigation">
-    <p class="sidebar-label">Workspace</p>
+  <aside class="sidebar" aria-label="{{ t("Workspace navigation") }}">
+    <p class="sidebar-label">{{ t("Workspace") }}</p>
     <nav class="side-nav">
-      {% for key, endpoint, icon, label in [('dashboard', 'index', '⌂', 'Dashboard'), ('planner', 'planner', '◌', 'Academic planner'), ('progress', 'progress', '↗', 'Progress tracking')] %}
-      <a class="{{ 'active' if page == key }}" {% if page == key %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}"><span aria-hidden="true">{{ icon }}</span>{{ label }}</a>
+      {% for key, endpoint, label in [('dashboard', 'index', 'Dashboard'), ('planner', 'planner', 'Academic planner'), ('progress', 'progress', 'Progress tracking')] %}
+      <a class="{{ 'active' if page == key }}" {% if page == key %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}">
+        <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          {% if key == 'dashboard' %}
+          <rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/>
+          {% elif key == 'planner' %}
+          <rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M7.5 3v4M16.5 3v4M3 10h18M7.5 14h2M14.5 14h2M7.5 17.5h2"/>
+          {% else %}
+          <path d="M4 3v17h17M8 15l4-5 4 2 5-7M17 5h4v4"/>
+          {% endif %}
+        </svg>
+        <span class="desktop-nav-label">{{ t(label) }}</span><span class="mobile-nav-label">{{ t({'dashboard': 'Tasks', 'planner': 'Planner', 'progress': 'Progress'}[key]) }}</span>
+      </a>
       {% endfor %}
     </nav>
-    <div class="sidebar-note"><span class="dot" aria-hidden="true"></span><div><strong>Your study space</strong><small>Plan. Build. Repeat.</small></div></div>
+    <div class="sidebar-note"><span class="dot" aria-hidden="true"></span><div><strong>{{ t("Your study space") }}</strong><small>{{ t("Plan. Build. Repeat.") }}</small></div></div>
   </aside>
   <main class="dashboard" id="main-content" tabindex="-1">
+    <div class="account-strip">
+      {% if g.user %}<span>{{ g.user.email }}</span><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">{{ t('Sign out') }}</button></form>
+      {% else %}<span>{{ t('Local workspace · only on this computer') }}</span><a href="{{ url_for('login') }}">{{ t('Cloud sign-in') }}</a>{% endif %}
+    </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}<div class="messages" role="status">{% for category, message in messages %}<p class="flash {{ category }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+      {% if messages %}<div class="messages" role="status">{% for category, message in messages %}<p class="flash {{ category }}">{{ t(message) }}</p>{% endfor %}</div>{% endif %}
     {% endwith %}
     {% block dashboard_content %}{% endblock %}
   </main>
 </div>
 <div class="modal" id="task-modal" aria-hidden="true" {% if task_errors %}data-reopen="true"{% endif %}>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <button class="close" type="button" data-close-modal aria-label="Close dialog">×</button>
-    <p class="eyebrow">NEW TASK</p><h2 id="modal-title">What needs your focus?</h2>
-    <form method="post" action="{{ url_for('create_task') }}" class="task-form" autocomplete="off">
+    <button class="close" type="button" data-close-modal aria-label="{{ t("Close dialog") }}">×</button>
+    <p class="eyebrow">{{ t("NEW TASK") }}</p><h2 id="modal-title">{{ t("What needs your focus?") }}</h2>
+    <form method="post" action="{{ url_for('create_task', **(filters|default({}))) }}" class="task-form" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ page }}">
-      {% macro field_error(name) %}{% if task_errors.get(name) %}<span class="field-error" id="error-{{ name }}">{{ task_errors[name] }}</span>{% endif %}{% endmacro %}
-      <label>Task title<input name="title" maxlength="100" value="{{ task_form.get('title', '') }}" placeholder="e.g. Complete database assignment…" {% if task_errors.get('title') %}aria-invalid="true" aria-describedby="error-title"{% endif %} required>{{ field_error('title') }}</label>
-      <label>Course or category<input name="course" maxlength="80" value="{{ task_form.get('course', '') }}" placeholder="e.g. Data Structures…" {% if task_errors.get('course') %}aria-invalid="true" aria-describedby="error-course"{% endif %} required>{{ field_error('course') }}</label>
+      {% macro field_error(name) %}{% if task_errors.get(name) %}<span class="field-error" id="error-{{ name }}">{{ t(task_errors[name]) }}</span>{% endif %}{% endmacro %}
+      <label>{{ t("Task title") }}<input name="title" maxlength="100" value="{{ task_form.get('title', '') }}" placeholder="{{ t("e.g. Complete database assignment…") }}" {% if task_errors.get('title') %}aria-invalid="true" aria-describedby="error-title"{% endif %} required>{{ field_error('title') }}</label>
+      <label>{{ t("Course or category") }}<input name="course" maxlength="80" value="{{ task_form.get('course', '') }}" placeholder="{{ t("e.g. Data Structures…") }}" {% if task_errors.get('course') %}aria-invalid="true" aria-describedby="error-course"{% endif %} required>{{ field_error('course') }}</label>
       <div class="form-row">
-        <label>Due date<input type="date" name="due_date" value="{{ task_form.get('due_date', '') }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
-        <label>Priority<select name="priority">{% for priority in ['Medium', 'High', 'Low'] %}<option {{ 'selected' if task_form.get('priority') == priority }}>{{ priority }}</option>{% endfor %}</select></label>
+        <label>{{ t("Due date") }}<input type="date" name="due_date" value="{{ task_form.get('due_date', '') }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
+        <label>{{ t("Priority") }}<select name="priority">{% for priority in ['Medium', 'High', 'Low'] %}<option value="{{ priority }}" {{ 'selected' if task_form.get('priority') == priority }}>{{ t(priority) }}</option>{% endfor %}</select></label>
       </div>
-      <label>Notes <span>(optional)</span><textarea name="notes" maxlength="300" placeholder="Add a note for future you…" {% if task_errors.get('notes') %}aria-invalid="true" aria-describedby="error-notes"{% endif %}>{{ task_form.get('notes', '') }}</textarea>{{ field_error('notes') }}</label>
-      <button class="primary" type="submit">Create task <span aria-hidden="true">→</span></button>
+      <label>{{ t("Notes") }} <span>{{ t("(optional)") }}</span><textarea name="notes" maxlength="300" placeholder="{{ t("Add a note for future you…") }}" {% if task_errors.get('notes') %}aria-invalid="true" aria-describedby="error-notes"{% endif %}>{{ task_form.get('notes', '') }}</textarea>{{ field_error('notes') }}</label>
+      <button class="primary" type="submit">{{ t("Create task") }} <span aria-hidden="true">→</span></button>
     </form>
   </div>
 </div>

@@ -9,3 +9,6 @@ studyflow.db
 instance/
 .pytest_cache/
 *.pyc
+.vercel/
+public/
+*.sqlite*

@@ -3,8 +3,8 @@
 {% block content %}
 <main class="workspace-board error-page" id="main-content">
   <p class="eyebrow">STUDYFLOW / {{ error.code }}</p>
-  <h1>{{ error.name }}</h1>
-  <p>{{ error.description }}</p>
-  <a class="secondary" href="{{ url_for('index') }}">Return to dashboard</a>
+  <h1>{{ t(error.name) }}</h1>
+  <p>{{ t(error_description) }}</p>
+  <a class="secondary" href="{{ url_for('index') }}">{{ t("Return to dashboard") }}</a>
 </main>
 {% endblock %}

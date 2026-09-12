@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ t('Sign in') }} · StudyFlow{% endblock %}
+{% block content %}
+<main class="auth-shell" id="main-content">
+  <div class="auth-heading">
+    <a class="brand" href="{{ url_for('index') }}"><img class="brand-symbol" src="{{ url_for('static', filename='brand-mark.svg') }}" width="36" height="36" alt=""><span class="brand-wordmark" translate="no">study<span>flow</span></span></a>
+    <form class="language-switch" method="post" action="{{ url_for('change_language') }}" aria-label="{{ t('Language') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="return_to" value="{{ request.path }}">
+      <button name="language" value="ru" lang="ru" aria-label="Русский" aria-pressed="{{ 'true' if lang == 'ru' else 'false' }}">RU</button><button name="language" value="en" lang="en" aria-label="English" aria-pressed="{{ 'true' if lang == 'en' else 'false' }}">EN</button>
+    </form>
+  </div>
+  <section class="auth-card" aria-labelledby="auth-title">
+    <p class="eyebrow">{{ t('YOUR PERSONAL STUDY SPACE') }}</p>
+    <h1 id="auth-title">{{ t('Check your inbox') if step == 'code' else t('A little focus. A lot of progress.') }}</h1>
+    {% if not ready %}
+      <p>{{ t('Cloud sign-in is not connected yet. Your existing tasks remain on this computer.') }}</p>
+      <a class="primary" href="{{ url_for('index') }}">{{ t('Return to dashboard') }}</a>
+    {% else %}
+      <p>{{ t('Enter the one-time code sent to your email.') if step == 'code' else t('Sign in or create an account with your email. No password to remember.') }}</p>
+      {% if error %}<p class="flash error" role="alert">{{ t(error) }}</p>{% endif %}
+      <form method="post" class="auth-form" action="{{ url_for('verify_login') if step == 'code' else url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if step == 'code' %}
+          <p class="auth-email">{{ email }}</p>
+          <label for="auth-code">{{ t('Email code') }}</label>
+          <input id="auth-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required {% if error %}aria-invalid="true"{% endif %}>
+          <button class="primary" type="submit">{{ t('Sign in') }} <span aria-hidden="true">→</span></button>
+          <a class="auth-link" href="{{ url_for('login') }}">{{ t('Use another email or request a new code') }}</a>
+        {% else %}
+          <label for="auth-email">{{ t('Email address') }}</label>
+          <input id="auth-email" type="email" name="email" autocomplete="email" maxlength="254" value="{{ email }}" placeholder="you@example.com" required {% if error %}aria-invalid="true"{% endif %}>
+          <button class="primary" type="submit">{{ t('Send a sign-in code') }} <span aria-hidden="true">→</span></button>
+        {% endif %}
+      </form>
+      <p class="auth-footnote">{{ t('Your tasks belong to your account. Never share sign-in codes.') }}</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

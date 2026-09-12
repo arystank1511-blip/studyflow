@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+.env.*
+*.db
+*.db-*
+*.sqlite*
+__pycache__
+*.pyc
+test_*.py
+supabase
+*.zip

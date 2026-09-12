@@ -1,20 +1,10 @@
 {% extends 'layout.html' %}
-{% block title %}Progress tracking · StudyFlow{% endblock %}
+{% block title %}{{ t("Progress tracking") }} · StudyFlow{% endblock %}
 {% block dashboard_content %}
-<section class="workspace-hero progress-hero">
-  <div><p class="eyebrow">PROGRESS TRACKING</p><h1>Make your momentum <em>visible.</em></h1><p>Completion updates automatically when you mark a task as done — no spreadsheets required.</p></div>
-  <div class="progress-mini-stats"><div><strong>{{ metrics.completed }}</strong><span>completed</span></div><div><strong>{{ metrics.in_progress }}</strong><span>in progress</span></div></div>
-</section>
-<section class="workspace-board">
-  <div class="workspace-head"><div><p class="eyebrow">BY COURSE</p><h2>Course progress</h2><p>A live view calculated from every task in your workspace.</p></div><a class="secondary" href="{{ url_for('planner') }}">Open planner <span aria-hidden="true">→</span></a></div>
-  {% if courses %}
-  <div class="course-list">
-    {% for course in courses %}
-    <article class="course-progress"><div class="course-progress-head"><div><h3>{{ course.name }}</h3><p>{{ course.done }} of {{ course.total }} tasks completed</p></div><strong>{{ course.percent }}%</strong></div><div class="course-bar" role="progressbar" aria-label="{{ course.name }} completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ course.percent }}"><span style="--progress: {{ course.percent }}%"></span></div></article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty"><div class="empty-icon" aria-hidden="true">↗</div><h3>Progress will appear here</h3><p>Add tasks with course names, then mark them done to see your real progress.</p><button class="secondary" type="button" data-open-modal>Create a task</button></div>
-  {% endif %}
+<header class="page-intro"><div><p class="eyebrow">{{ t("PROGRESS TRACKING") }}</p><h1>{{ t("Know where you stand.") }}</h1><p>{{ t("Completed tasks show progress. Remaining tasks show your next move.") }}</p></div></header>
+<section class="completion-overview" aria-label="{{ t("Overall task completion") }}"><div><p class="eyebrow">{{ t("OVERALL COMPLETION") }}</p><strong>{{ metrics.completed_percent }}<span>%</span></strong><p>{{ t('{done} of {total} tasks completed', done=metrics.completed, total=metrics.total) }}</p></div><div class="overall-track"><div class="course-bar" role="progressbar" aria-label="{{ t("Overall task completion") }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ metrics.completed_percent }}"><span style="--progress: {{ metrics.completed_percent }}%"></span></div><p>{{ t("Based on task counts, not grades or study time.") }}</p><a class="edit-link" href="{{ url_for('index', view='active') }}">{{ t("View remaining tasks →") }}</a></div></section>
+<section class="workspace-board"><div class="workspace-head"><div><p class="eyebrow">{{ t("BY COURSE") }}</p><h2>{{ t("Where to put your attention") }}</h2><p>{{ t("Courses with overdue tasks appear first.") }}</p></div></div>
+{% if courses %}<div class="course-list">{% for course in courses %}<article class="course-progress"><div class="course-progress-head"><div><h3>{{ course.name }}</h3><p>{{ t('{done} of {total} tasks completed', done=course.done, total=course.total) }} · {{ t('{n} remaining', n=course.total - course.done) }}</p></div><strong>{{ course.percent }}%</strong></div><div class="course-bar" role="progressbar" aria-label="{{ t('{course} completion', course=course.name) }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ course.percent }}"><span style="--progress: {{ course.percent }}%"></span></div><div class="course-next">{% if course.overdue %}<a class="overdue-link" href="{{ url_for('index', view='overdue', course=course.name) }}">{{ t('{n} overdue · Review deadlines', n=course.overdue) }}</a>{% elif course.done == course.total %}<span>{{ t("All caught up ✓") }}</span>{% else %}<span>{{ t("One task at a time.") }}</span>{% endif %}<a class="edit-link" href="{{ url_for('index', view='active' if course.done < course.total else 'done', course=course.name) }}">{{ t('View remaining') if course.done < course.total else t('View completed') }} →</a></div></article>{% endfor %}</div>
+{% else %}<div class="empty"><h3>{{ t("Progress starts with a task") }}</h3><p>{{ t("Add a course and assignment. Your progress will update as you complete tasks.") }}</p><button class="secondary" type="button" data-open-modal>{{ t("Create a task") }}</button></div>{% endif %}
 </section>
 {% endblock %}

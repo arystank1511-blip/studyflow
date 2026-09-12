@@ -6,8 +6,6 @@ body.modal-open { overflow: hidden; }
 .primary:disabled { opacity: .65; cursor: wait; }
 .primary:not(.top-action) { background: #137b4c; }
 .primary:not(.top-action):hover { background: #0d613b; }
-.workspace-label { text-decoration: none; }
-.workspace-label:hover { background: #ffffff26; }
 .side-nav a:not(.active):hover { background: #dbeee2; color: #154a31; }
 .side-nav a.active { background: #137b4c !important; }
 .eyebrow, .sidebar-label { color: #536e61; }
@@ -41,15 +39,15 @@ body.modal-open { overflow: hidden; }
   box-shadow: 0 8px 24px rgba(6, 30, 25, .18);
 }
 
-.brand { color: #fff; }
-.brand-mark:before, .brand-mark:after, .brand-mark i { background: #dfffe9; }
-.brand-mark i:nth-child(2) { background: #42e88c; }
-.workspace-label {
-  color: #e1f6ea;
-  padding: 8px 12px;
-  border: 1px solid rgba(222, 255, 236, .26);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .08);
+.brand { color: #fff; gap: 10px; min-height: 44px; }
+.brand-symbol { display: block; flex-shrink: 0; }
+.brand-wordmark { font-size: 24px; font-weight: 700; letter-spacing: -.045em; line-height: 1; }
+.brand-wordmark > span { color: #b5efd1; font-weight: 500; }
+.brand:hover .brand-wordmark > span { color: #d7ff7d; }
+@media (max-width: 430px) {
+  .brand { gap: 8px; }
+  .brand-symbol { width: 30px; height: 30px; }
+  .brand-wordmark { font-size: 22px; }
 }
 
 .top-action {

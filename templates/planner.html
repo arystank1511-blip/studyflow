@@ -1,24 +1,18 @@
 {% extends 'layout.html' %}
-{% block title %}Academic planner · StudyFlow{% endblock %}
+{% from 'task_card.html' import task_card with context %}
+{% block title %}{{ t("Academic planner") }} · StudyFlow{% endblock %}
 {% block dashboard_content %}
-<section class="workspace-hero planner-hero">
-  <div><p class="eyebrow">ACADEMIC PLANNER</p><h1>Know what comes <em>next.</em></h1><p>StudyFlow automatically brings unfinished work and upcoming deadlines to the front.</p></div>
-  <div class="workspace-stat"><strong>{{ metrics.total }}</strong><span>tasks in your plan</span></div>
+<header class="page-intro"><div><p class="eyebrow">{{ t("ACADEMIC PLANNER") }}</p><h1>{{ t("See the week before it fills up.") }}</h1><p>{{ t("Unfinished tasks by deadline. The counts below exclude completed work.") }}</p></div></header>
+<section class="week-panel" aria-label="{{ t("Next seven days") }}">
+  <div class="week-panel-heading"><h2>{{ t("Next 7 days") }}</h2>{% if metrics.overdue %}<a class="overdue-link" href="{{ url_for('index', view='overdue') }}">{{ t('{n} overdue · Review', n=metrics.overdue) }}</a>{% else %}<span>{{ t("No overdue tasks") }}</span>{% endif %}</div>
+  <div class="week-grid">{% for day in week %}<a class="week-day {{ 'today' if loop.first }} {{ 'busy' if day.count >= 3 }}" href="{{ url_for('index', view='active', day=day.date) }}" aria-label="{{ t('{date}: {n} unfinished tasks', date=day.date, n=day.count) }}"><span>{{ t(day.label) }}</span><strong>{{ day.number }}</strong><span class="day-count">{{ task_count(day.count) }}</span><span class="day-load" aria-hidden="true">{% for i in range([day.count, 5]|min) %}<i></i>{% endfor %}</span></a>{% endfor %}</div>
+  <p class="week-help">{{ t("Select a day to see its tasks. Three or more deadlines are highlighted.") }}</p>
 </section>
-<section class="workspace-board">
-  <div class="workspace-head"><div><p class="eyebrow">UPCOMING WORK</p><h2>Your deadline timeline</h2><p>Tasks are sorted by status and due date, so the next action is always clear.</p></div><button class="secondary" type="button" data-open-modal>Add task <span aria-hidden="true">+</span></button></div>
-  {% if tasks %}
-  <div class="planner-list">
-    {% for task in tasks %}
-    <article class="planner-task {% if task.status == 'Done' %}is-done{% endif %}">
-      <div class="planner-date {% if task.status != 'Done' and task.due_date < today %}is-late{% endif %}"><span>Due</span><strong><time datetime="{{ task.due_date }}">{{ task.due_date }}</time></strong></div>
-      <div class="planner-main"><div class="task-title-row"><h3>{{ task.title }}</h3><span class="priority {{ task.priority|lower }}">{{ task.priority }}</span></div><p>{{ task.course }}</p>{% if task.notes %}<small>{{ task.notes }}</small>{% endif %}</div>
-      <div class="planner-actions"><form method="post" action="{{ url_for('update_status', task_id=task.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="planner"><label class="sr-only" for="planner-status-{{ task.id }}">Status for {{ task.title }}</label><select id="planner-status-{{ task.id }}" name="status" onchange="this.form.submit()"><option {{ 'selected' if task.status == 'To do' }}>To do</option><option {{ 'selected' if task.status == 'In progress' }}>In progress</option><option {{ 'selected' if task.status == 'Done' }}>Done</option></select></form><form method="post" action="{{ url_for('delete_task', task_id=task.id) }}" onsubmit="return confirm('Delete this task?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="planner"><button class="delete" type="submit" aria-label="Delete {{ task.title }}">×</button></form></div>
-    </article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty"><div class="empty-icon" aria-hidden="true">◌</div><h3>Your schedule is open</h3><p>Add an assignment and StudyFlow will place it in this timeline automatically.</p><button class="secondary" type="button" data-open-modal>Add your first task</button></div>
-  {% endif %}
+<section class="workspace-board agenda" aria-labelledby="agenda-heading"><div class="workspace-head"><div><p class="eyebrow">{{ t("DEADLINES") }}</p><h2 id="agenda-heading">{{ t("Your agenda") }}</h2></div><button class="secondary" type="button" data-open-modal>{{ t("Add task") }} +</button></div>
+{% for name, grouped in groups.items() if grouped %}
+  {% if name == 'Completed' %}<details class="completed-group"><summary>{{ t("Completed") }} <span>{{ grouped|length }}</span></summary>{% else %}<section class="agenda-group {{ 'overdue-group' if name == 'Overdue' }}"><h3 class="group-heading">{{ t(name) }} <span>{{ grouped|length }}</span></h3>{% endif %}
+  {% for task in grouped %}{{ task_card(task, page, filters, today) }}{% endfor %}
+  {% if name == 'Completed' %}</details>{% else %}</section>{% endif %}
+{% else %}<div class="empty"><h3>{{ t("Your schedule is open") }}</h3><p>{{ t("Add your next assignment and it will appear here by deadline.") }}</p><button class="secondary" type="button" data-open-modal>{{ t("Add your first task") }}</button></div>{% endfor %}
 </section>
 {% endblock %}

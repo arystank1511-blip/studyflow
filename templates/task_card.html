@@ -1,0 +1,18 @@
+{% macro task_card(task, page, filters, today) %}
+<article class="work-task {{ 'is-done' if task.status == 'Done' }}">
+  <div class="work-task-content">
+    <div class="work-task-heading"><h3>{{ task.title }}</h3><span class="priority {{ task.priority|lower }}">{{ t(task.priority) }}</span></div>
+    <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if task.status != 'Done' and task.due_date < today }}">{% if task.status != 'Done' and task.due_date < today %}{{ t("Overdue") }} · {% else %}{{ t("Due") }} {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span></div>
+    {% if task.notes %}<details class="task-notes"><summary>{{ t("Notes") }}</summary><p>{{ task.notes }}</p></details>{% endif %}
+  </div>
+  <div class="work-task-actions">
+    <form method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
+      <label class="sr-only" for="status-{{ task.id }}">{{ t('Status for {title}', title=task.title) }}</label>
+      <select id="status-{{ task.id }}" name="status" data-auto-submit>{% for option in ['To do', 'In progress', 'Done'] %}<option value="{{ option }}" {{ 'selected' if task.status == option }}>{{ t(option) }}</option>{% endfor %}</select>
+    </form>
+    <a class="edit-link" aria-label="{{ t('Edit {title}', title=task.title) }}" href="{{ url_for('edit_task', task_id=task.id, next=page, **filters) }}">{{ t("Edit") }}</a>
+    <form method="post" action="{{ url_for('delete_task', task_id=task.id, **filters) }}" data-confirm="{{ t('Delete this task?') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button class="delete" aria-label="{{ t('Delete {title}', title=task.title) }}" type="submit">×</button></form>
+  </div>
+</article>
+{% endmacro %}
