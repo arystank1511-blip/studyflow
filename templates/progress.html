@@ -1,0 +1,20 @@
+{% extends 'layout.html' %}
+{% block title %}Progress tracking · StudyFlow{% endblock %}
+{% block dashboard_content %}
+<section class="workspace-hero progress-hero">
+  <div><p class="eyebrow">PROGRESS TRACKING</p><h1>Make your momentum <em>visible.</em></h1><p>Completion updates automatically when you mark a task as done — no spreadsheets required.</p></div>
+  <div class="progress-mini-stats"><div><strong>{{ metrics.completed }}</strong><span>completed</span></div><div><strong>{{ metrics.in_progress }}</strong><span>in progress</span></div></div>
+</section>
+<section class="workspace-board">
+  <div class="workspace-head"><div><p class="eyebrow">BY COURSE</p><h2>Course progress</h2><p>A live view calculated from every task in your workspace.</p></div><a class="secondary" href="{{ url_for('planner') }}">Open planner <span aria-hidden="true">→</span></a></div>
+  {% if courses %}
+  <div class="course-list">
+    {% for course in courses %}
+    <article class="course-progress"><div class="course-progress-head"><div><h3>{{ course.name }}</h3><p>{{ course.done }} of {{ course.total }} tasks completed</p></div><strong>{{ course.percent }}%</strong></div><div class="course-bar" role="progressbar" aria-label="{{ course.name }} completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ course.percent }}"><span style="--progress: {{ course.percent }}%"></span></div></article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><div class="empty-icon" aria-hidden="true">↗</div><h3>Progress will appear here</h3><p>Add tasks with course names, then mark them done to see your real progress.</p><button class="secondary" type="button" data-open-modal>Create a task</button></div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-frame">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="StudyFlow dashboard"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span translate="no">studyflow</span></a>
+    <div class="topbar-actions"><a class="workspace-label" href="{{ url_for('planner') }}">Academic workspace</a><button class="primary top-action" type="button" data-open-modal>New task <span aria-hidden="true">+</span></button></div>
+  </header>
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <p class="sidebar-label">Workspace</p>
+    <nav class="side-nav">
+      {% for key, endpoint, icon, label in [('dashboard', 'index', '⌂', 'Dashboard'), ('planner', 'planner', '◌', 'Academic planner'), ('progress', 'progress', '↗', 'Progress tracking')] %}
+      <a class="{{ 'active' if page == key }}" {% if page == key %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}"><span aria-hidden="true">{{ icon }}</span>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-note"><span class="dot" aria-hidden="true"></span><div><strong>Your study space</strong><small>Plan. Build. Repeat.</small></div></div>
+  </aside>
+  <main class="dashboard" id="main-content" tabindex="-1">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}<div class="messages" role="status">{% for category, message in messages %}<p class="flash {{ category }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+    {% endwith %}
+    {% block dashboard_content %}{% endblock %}
+  </main>
+</div>
+<div class="modal" id="task-modal" aria-hidden="true" {% if task_errors %}data-reopen="true"{% endif %}>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="close" type="button" data-close-modal aria-label="Close dialog">×</button>
+    <p class="eyebrow">NEW TASK</p><h2 id="modal-title">What needs your focus?</h2>
+    <form method="post" action="{{ url_for('create_task') }}" class="task-form" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ page }}">
+      {% macro field_error(name) %}{% if task_errors.get(name) %}<span class="field-error" id="error-{{ name }}">{{ task_errors[name] }}</span>{% endif %}{% endmacro %}
+      <label>Task title<input name="title" maxlength="100" value="{{ task_form.get('title', '') }}" placeholder="e.g. Complete database assignment…" {% if task_errors.get('title') %}aria-invalid="true" aria-describedby="error-title"{% endif %} required>{{ field_error('title') }}</label>
+      <label>Course or category<input name="course" maxlength="80" value="{{ task_form.get('course', '') }}" placeholder="e.g. Data Structures…" {% if task_errors.get('course') %}aria-invalid="true" aria-describedby="error-course"{% endif %} required>{{ field_error('course') }}</label>
+      <div class="form-row">
+        <label>Due date<input type="date" name="due_date" value="{{ task_form.get('due_date', '') }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
+        <label>Priority<select name="priority">{% for priority in ['Medium', 'High', 'Low'] %}<option {{ 'selected' if task_form.get('priority') == priority }}>{{ priority }}</option>{% endfor %}</select></label>
+      </div>
+      <label>Notes <span>(optional)</span><textarea name="notes" maxlength="300" placeholder="Add a note for future you…" {% if task_errors.get('notes') %}aria-invalid="true" aria-describedby="error-notes"{% endif %}>{{ task_form.get('notes', '') }}</textarea>{{ field_error('notes') }}</label>
+      <button class="primary" type="submit">Create task <span aria-hidden="true">→</span></button>
+    </form>
+  </div>
+</div>
+{% endblock %}
