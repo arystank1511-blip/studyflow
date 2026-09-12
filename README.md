@@ -12,15 +12,15 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Change a task's status: **To do**, **In progress**, or **Done**
 - Search tasks and filter by status
 - Track total, completed, in-progress, and overdue tasks
-- Academic planner: unfinished tasks first, ordered by deadline
-- Suggested next task with an explicit deadline/priority rule and a start/complete action
-- Quick views for active, today, next seven days, overdue, completed, and all tasks
-- Seven-day deadline load; click a day to see its unfinished tasks
+- Unified Tasks & plan workspace: calendar and task list in one place; `/planner` remains a compatible URL
+- Select a date to view its tasks; use its separate plus button to create a task with that deadline
+- Active, overdue, completed and all filters retain the selected date; counts reflect the selected date, course and search
+- Explicit Apply filters and Save status buttons; no automatic status submission
 - Edit titles, courses, deadlines, priorities, and notes without losing completion status
 - Filter by course; jump from course progress straight to outstanding work
-- Grouped agenda with completed tasks collapsed
+- Successful creation or rescheduling reveals the task on its deadline, even if a previous filter would hide it
 - Course progress: completed tasks divided by the total for each course
-- Delete tasks with confirmation
+- Delete tasks with an in-app confirmation dialog and cancellation
 - Responsive interface for desktop and mobile
 - Dedicated phone layout: bottom navigation, large touch targets, full-screen task form, and scrollable week strip
 - Russian / English switch, remembered for one year; first visit follows the browser language

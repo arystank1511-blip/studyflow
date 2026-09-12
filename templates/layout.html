@@ -8,18 +8,16 @@
   <aside class="sidebar" aria-label="{{ t("Workspace navigation") }}">
     <p class="sidebar-label">{{ t("Workspace") }}</p>
     <nav class="side-nav">
-      {% for key, endpoint, label in [('dashboard', 'index', 'Dashboard'), ('planner', 'planner', 'Academic planner'), ('progress', 'progress', 'Progress tracking')] %}
+      {% for key, endpoint, label in [('dashboard', 'index', 'Tasks & plan'), ('progress', 'progress', 'Progress tracking')] %}
       <a class="{{ 'active' if page == key }}" {% if page == key %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}">
         <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           {% if key == 'dashboard' %}
-          <rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/>
-          {% elif key == 'planner' %}
           <rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M7.5 3v4M16.5 3v4M3 10h18M7.5 14h2M14.5 14h2M7.5 17.5h2"/>
           {% else %}
           <path d="M4 3v17h17M8 15l4-5 4 2 5-7M17 5h4v4"/>
           {% endif %}
         </svg>
-        <span class="desktop-nav-label">{{ t(label) }}</span><span class="mobile-nav-label">{{ t({'dashboard': 'Tasks', 'planner': 'Planner', 'progress': 'Progress'}[key]) }}</span>
+        <span class="desktop-nav-label">{{ t(label) }}</span><span class="mobile-nav-label">{{ t({'dashboard': 'Tasks & plan', 'progress': 'Progress'}[key]) }}</span>
       </a>
       {% endfor %}
     </nav>
@@ -43,11 +41,12 @@
     <form method="post" action="{{ url_for('create_task', **(filters|default({}))) }}" class="task-form" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ page }}">
+      {% if page == 'dashboard' %}<input type="hidden" name="workspace" value="unified">{% endif %}
       {% macro field_error(name) %}{% if task_errors.get(name) %}<span class="field-error" id="error-{{ name }}">{{ t(task_errors[name]) }}</span>{% endif %}{% endmacro %}
       <label>{{ t("Task title") }}<input name="title" maxlength="100" value="{{ task_form.get('title', '') }}" placeholder="{{ t("e.g. Complete database assignment…") }}" {% if task_errors.get('title') %}aria-invalid="true" aria-describedby="error-title"{% endif %} required>{{ field_error('title') }}</label>
       <label>{{ t("Course or category") }}<input name="course" maxlength="80" value="{{ task_form.get('course', '') }}" placeholder="{{ t("e.g. Data Structures…") }}" {% if task_errors.get('course') %}aria-invalid="true" aria-describedby="error-course"{% endif %} required>{{ field_error('course') }}</label>
       <div class="form-row">
-        <label>{{ t("Due date") }}<input type="date" name="due_date" value="{{ task_form.get('due_date', '') }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
+        <label>{{ t("Due date") }}<input type="date" name="due_date" value="{{ task_form.get('due_date', day|default('')) }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
         <label>{{ t("Priority") }}<select name="priority">{% for priority in ['Medium', 'High', 'Low'] %}<option value="{{ priority }}" {{ 'selected' if task_form.get('priority') == priority }}>{{ t(priority) }}</option>{% endfor %}</select></label>
       </div>
       <label>{{ t("Notes") }} <span>{{ t("(optional)") }}</span><textarea name="notes" maxlength="300" placeholder="{{ t("Add a note for future you…") }}" {% if task_errors.get('notes') %}aria-invalid="true" aria-describedby="error-notes"{% endif %}>{{ task_form.get('notes', '') }}</textarea>{{ field_error('notes') }}</label>
@@ -55,4 +54,9 @@
     </form>
   </div>
 </div>
+<dialog id="delete-dialog" class="confirm-dialog" aria-labelledby="delete-heading" aria-describedby="delete-description">
+  <h2 id="delete-heading">{{ t('Delete this task?') }}</h2>
+  <p id="delete-description">{{ t('This removes the task from your plan. This action cannot be undone.') }}</p>
+  <div class="confirm-actions"><button class="secondary" type="button" data-cancel-delete>{{ t('Cancel') }}</button><button class="danger-action" type="button" data-confirm-delete>{{ t('Delete task') }}</button></div>
+</dialog>
 {% endblock %}

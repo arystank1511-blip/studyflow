@@ -1,0 +1,34 @@
+/* One workspace, explicit date selection and creation, no duplicate mobile tabs. */
+.unified-week .week-day { padding:0; gap:0; overflow:hidden; }
+.day-select { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; padding:14px 4px 9px; color:inherit; text-decoration:none; }
+.day-select > span:first-child { font-size:12px; font-weight:600; }
+.day-select .day-count { min-height:0; padding:0; font-size:11px; }
+.day-select:hover { background:#dfefe3; }
+.week-day.selected { border:2px solid #176443; background:#d5ecd9; }
+.week-day.selected .day-select { padding-top:13px; font-weight:600; }
+.day-add-task { display:flex; align-items:center; justify-content:center; width:100%; min-height:44px; border:0; border-top:1px solid #d5e4da; background:#f5faf6; color:#1b6744; font:600 23px 'Golos Text',sans-serif; cursor:pointer; }
+.day-add-task:hover { background:#c9e6d3; color:#0a3b24; }
+.day-select:focus-visible,.day-add-task:focus-visible { outline:3px solid #347955; outline-offset:-3px; }
+.unified-tasks { scroll-margin-top:90px; }
+.unified-tasks .workspace-head { align-items:center; gap:15px; }
+.unified-tasks h2 time { font-size:inherit; }
+.unified-tasks .view-tabs { flex-wrap:wrap; overflow:visible; }
+.unified-tasks .view-tabs a { min-height:44px; }
+.unified-filters { display:grid; grid-template-columns:minmax(160px,2fr) minmax(130px,1fr) minmax(145px,1fr) auto; align-items:end; }
+.unified-filters label { min-width:0; display:flex; flex-direction:column; gap:7px; color:#426651; font-size:12px; font-weight:500; }
+.unified-filters label input,.unified-filters label select { width:100%; max-width:100%; min-width:0; flex:initial; }
+.unified-filters .edit-link { grid-column:1/-1; justify-self:start; }
+.task-status-form { display:flex; align-items:center; gap:6px; }
+.status-save { border:1px solid #a6c5af; border-radius:8px; background:#e7f3e9; color:#195d39; padding:10px; min-height:44px; cursor:pointer; font:600 12px 'Golos Text',sans-serif; }
+.status-save:hover { background:#cfe8d5; }
+.work-task-actions .delete { display:flex; align-items:center; justify-content:center; }
+.unified-tasks .empty .edit-link { margin:8px; }
+.scope-note { color:#526e5e; font-size:13px; }
+button,a,input,select { touch-action:manipulation; }
+.confirm-dialog{max-width:440px;width:calc(100% - 32px);padding:28px;border:1px solid #d2e1d7;border-radius:18px;color:#173e2a;background:#fff;box-shadow:0 20px 70px #102e2440;}
+.confirm-dialog::backdrop{background:#10251bcc;}
+.confirm-dialog h2{margin:0 0 14px;font-size:23px;}.confirm-dialog p{font-size:14px;line-height:1.6;color:#526a5d;}
+.confirm-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:24px;}.danger-action{background:#a72f25;color:#fff;border:0;border-radius:9px;min-height:44px;padding:12px 18px;font:600 14px 'Golos Text',sans-serif;cursor:pointer;}.danger-action:hover{background:#85231b;}
+@media(max-width:1000px){.unified-filters{grid-template-columns:repeat(2,minmax(0,1fr));}.unified-filters .secondary{min-height:44px;}}
+@media(max-width:720px){.side-nav{grid-template-columns:repeat(2,minmax(0,1fr));}.unified-week .week-grid{grid-template-columns:repeat(7,minmax(0,1fr));overflow:visible;padding:0;gap:5px;}.unified-filters label input,.unified-filters label select{font-size:16px;min-height:48px;}.unified-tasks .view-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;}.unified-tasks .view-tabs a{justify-content:center;gap:4px;padding-inline:6px;}.task-status-form{flex:1;}.status-save{min-height:48px;}.unified-tasks .workspace-head{flex-wrap:wrap;}}
+@media(max-width:560px){.unified-week .week-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;}.unified-tasks .view-tabs{grid-template-columns:repeat(2,minmax(0,1fr));}.unified-filters label:first-of-type{grid-column:1/-1;}.unified-filters .secondary{grid-column:1/-1;min-height:48px;}.unified-filters .edit-link{justify-self:center;}.work-task-actions{flex-wrap:wrap;}.work-task-actions>form:first-child{flex-basis:100%;}.day-select{gap:5px;padding:10px 3px 8px;}.day-select strong{font-size:22px;}}

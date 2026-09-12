@@ -1,25 +1,35 @@
 {% extends 'layout.html' %}
 {% from 'task_card.html' import task_card with context %}
+{% block title %}{{ t('Tasks & plan') }} · StudyFlow{% endblock %}
 {% block dashboard_content %}
-<header class="page-intro"><div><p class="eyebrow">{{ t("YOUR STUDY DESK") }}</p><h1>{{ t("A clear plan. One task at a time.") }}</h1><p>{% if counts.today %}{{ t('{n} tasks due today.', n=counts.today) }}{% elif counts.overdue %}{{ t("A little catch-up will go a long way.") }}{% else %}{{ t("Nothing due today. A good moment to get ahead.") }}{% endif %}</p></div><span class="page-date"><time datetime="{{ today }}">{{ today }}</time></span></header>
-<section class="next-up" aria-labelledby="next-up-title">
-  {% if next_task %}
-  <div class="next-up-copy"><p class="eyebrow">{{ t("SUGGESTED NEXT STEP") }}</p><h2 id="next-up-title">{{ next_task.title }}</h2><p class="next-up-meta">{{ next_task.course }} <span>·</span> {{ next_label }} <span>·</span> {{ t('{priority} priority', priority=t(next_task.priority)) }}</p><p class="recommendation-note">{{ t("Earliest deadline first; priority breaks ties.") }}</p></div>
-  <div class="next-up-actions"><form method="post" action="{{ url_for('update_status', task_id=next_task.id, **filters) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="dashboard"><input type="hidden" name="status" value="{{ 'Done' if next_task.status == 'In progress' else 'In progress' }}"><button class="primary" type="submit">{{ t('Mark done') if next_task.status == 'In progress' else t('Start task') }} <span aria-hidden="true">→</span></button></form><a href="{{ url_for('edit_task', task_id=next_task.id, next='dashboard', **filters) }}">{{ t("Review or reschedule") }}</a></div>
-  {% else %}
-  <div class="next-up-copy"><p class="eyebrow">{{ t('ALL CAUGHT UP') if metrics.total else t('START SMALL') }}</p><h2 id="next-up-title">{{ t('Your task list is clear.') if metrics.total else t('Give your next deadline a home.') }}</h2><p>{{ t("Add an assignment, a reading task, or revision for an exam.") }}</p></div><button class="primary" type="button" data-open-modal>{{ t("New task") }} <span aria-hidden="true">+</span></button>
-  {% endif %}
+<header class="page-intro"><div><p class="eyebrow">STUDYFLOW</p><h1>{{ t('Tasks & plan') }}</h1><p>{{ t('Choose a day, plan your work, and update tasks in one place.') }}</p></div><span class="page-date"><time datetime="{{ today }}">{{ today }}</time></span></header>
+<section class="week-panel unified-week" aria-label="{{ t('Next seven days') }}">
+  <div class="week-panel-heading"><h2>{{ t('Next 7 days') }}</h2><a class="edit-link" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('All dates') }}</a></div>
+  <div class="week-grid">{% for item in week %}
+    <div class="week-day {{ 'today' if item.date == today }} {{ 'selected' if day == item.date }}">
+      <a class="day-select" href="{{ url_for('index', view='all', day=item.date, _anchor='task-workspace') }}" {% if day == item.date %}aria-current="date"{% endif %} aria-label="{{ t('Show tasks for {date}', date=item.date) }}">
+        <span>{{ t(item.label) }}</span><strong>{{ item.number }}</strong><span class="day-count">{{ task_count(item.total) }}</span>
+      </a>
+      <button class="day-add-task" type="button" data-open-modal data-task-date="{{ item.date }}" aria-label="{{ t('Add a task for {date}', date=item.date) }}" title="{{ t('Add a task for {date}', date=item.date) }}" aria-haspopup="dialog" aria-controls="task-modal"><span aria-hidden="true">+</span></button>
+    </div>
+  {% endfor %}</div>
+  <p class="week-help">{{ t('Date = task list. Plus = new task for that date.') }}</p>
 </section>
-<nav class="summary-strip" aria-label="{{ t("Task shortcuts") }}">
-  {% for key, label in [('today', 'Due today'), ('week', 'Next 7 days'), ('overdue', 'Overdue'), ('done', 'Completed')] %}
-  <a class="summary-tile {{ 'attention' if key == 'overdue' and counts.overdue }}" href="{{ url_for('index', view=key) }}"><span>{{ t(label) }}</span><strong>{{ counts[key] }}</strong><span class="summary-arrow" aria-hidden="true">↗</span></a>
-  {% endfor %}
-</nav>
-<section class="workspace-board task-workspace" aria-labelledby="task-heading">
-  <div class="workspace-head"><div><p class="eyebrow">{{ t("YOUR TASKS") }}</p><h2 id="task-heading">{{ course or t('Make room for what matters.') }}</h2><p>{{ t('{n} tasks shown', n=tasks|length) }}{% if day %} · <time datetime="{{ day }}">{{ day }}</time>{% endif %}</p></div></div>
-  <nav class="view-tabs" aria-label="{{ t("Task views") }}">{% for key, label in [('active','Active'), ('today','Today'), ('week','Next 7 days'), ('overdue','Overdue'), ('done','Done'), ('all','All')] %}<a href="{{ url_for('index', view=key, q=search, course=course) }}" {% if view == key and not day %}aria-current="page"{% endif %}>{{ t(label) }} <span>{{ counts[key] }}</span></a>{% endfor %}</nav>
-  <form class="work-filters" method="get" autocomplete="off"><input type="hidden" name="view" value="{{ view }}">{% if day %}<input type="hidden" name="day" value="{{ day }}">{% endif %}{% if status != 'All' %}<input type="hidden" name="status" value="{{ status }}">{% endif %}<label class="sr-only" for="task-search">{{ t("Search tasks") }}</label><input id="task-search" name="q" value="{{ search }}" placeholder="{{ t("Search tasks or courses…") }}"><label class="sr-only" for="course-filter">{{ t("Course filter") }}</label><select id="course-filter" name="course"><option value="">{{ t("All courses") }}</option>{% for name in courses %}<option value="{{ name }}" {{ 'selected' if course == name }}>{{ name }}</option>{% endfor %}</select><button class="secondary" type="submit">{{ t("Search") }}</button>{% if search or course or day or status != 'All' %}<a class="edit-link" href="{{ url_for('index', view=view) }}">{{ t("Clear filters") }}</a>{% endif %}</form>
+<section class="workspace-board task-workspace unified-tasks" id="task-workspace" aria-labelledby="task-heading">
+  <div class="workspace-head"><div><h2 id="task-heading">{% if day %}{{ t('Tasks for') }} <time datetime="{{ day }}">{{ day }}</time>{% else %}{{ t('Your tasks') }}{% endif %}</h2><p>{{ t('{n} tasks shown', n=tasks|length) }}</p></div><button class="secondary" type="button" data-open-modal {% if day %}data-task-date="{{ day }}"{% endif %}>{{ t('Add task') }} <span aria-hidden="true">+</span></button></div>
+  <nav class="view-tabs" aria-label="{{ t('Task views') }}">
+    {% for key, label in [('active','Active'), ('overdue','Overdue'), ('done','Done'), ('all','All')] %}<a href="{{ url_for('index', view=key, day=day, q=search, course=course, _anchor='task-workspace') }}" {% if view == key %}aria-current="page"{% endif %}>{{ t(label) }} <span>{{ filter_counts[key] }}</span></a>{% endfor %}
+  </nav>
+  {% if view in ['today', 'week'] %}<p class="scope-note">{{ t('Due today') if view == 'today' else t('Next 7 days') }}</p>{% endif %}
+  <form class="work-filters unified-filters" action="{{ url_for('index', _anchor='task-workspace') }}" method="get" autocomplete="off">
+    <input type="hidden" name="view" value="{{ view }}">{% if status != 'All' %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <label>{{ t('Search tasks') }}<input name="q" value="{{ search }}" placeholder="{{ t('Search tasks or courses…') }}"></label>
+    <label>{{ t('Course filter') }}<select name="course"><option value="">{{ t('All courses') }}</option>{% for name in courses %}<option value="{{ name }}" {{ 'selected' if course == name }}>{{ name }}</option>{% endfor %}</select></label>
+    <label>{{ t('Date filter') }}<input type="date" name="day" value="{{ day }}"></label>
+    <button class="secondary" type="submit">{{ t('Apply filters') }}</button>
+    {% if search or course or day or status != 'All' %}<a class="edit-link" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('Clear filters') }}</a>{% endif %}
+  </form>
   {% if tasks %}<div class="work-task-list">{% for task in tasks %}{{ task_card(task, page, filters, today) }}{% endfor %}</div>
-  {% else %}<div class="empty"><div class="empty-icon" aria-hidden="true">✓</div><h3>{{ t('No matching tasks') if metrics.total else t('A fresh start') }}</h3><p>{% if search or course or day %}{{ t("Try another course, date, or search.") }}{% elif view == 'overdue' %}{{ t("No overdue work. Keep that breathing room.") }}{% elif view == 'done' %}{{ t("Your completed tasks will appear here.") }}{% else %}{{ t("No tasks in this view. Check your full list or add something new.") }}{% endif %}</p>{% if metrics.total %}<a class="secondary" href="{{ url_for('index', view='all') }}">{{ t("Clear filters · View all tasks") }}</a>{% else %}<button class="secondary" type="button" data-open-modal>{{ t("Create your first task") }}</button>{% endif %}</div>{% endif %}
+  {% else %}<div class="empty"><h3>{{ t('No matching tasks') if metrics.total else t('A fresh start') }}</h3><p>{{ t('No tasks in this view. Add one or change the filters.') }}</p><button class="primary" type="button" data-open-modal {% if day %}data-task-date="{{ day }}"{% endif %}>{{ t('Add task') }} <span aria-hidden="true">+</span></button>{% if metrics.total %}<a class="edit-link" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('Clear filters · View all tasks') }}</a>{% endif %}</div>{% endif %}
 </section>
 {% endblock %}

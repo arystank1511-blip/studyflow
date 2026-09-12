@@ -31,7 +31,7 @@ still require account setup. Do not advertise this as a penetration-tested produ
 
 ## Verification
 
-- 32 offline regression tests: task flows, RU/EN, CSRF including malformed Unicode,
+- 40 offline regression tests: task flows, unified calendar/list navigation, RU/EN, CSRF including malformed Unicode,
   verified identity, expired sessions, OTP validation, cookie flags, account owner filters,
   foreign IDs, escaping, unsafe redirects, host validation, and cloud-outage fail-closed behavior.
 - Cloud tests mock Supabase; they test application behavior, not the deployed RLS engine.

@@ -13,6 +13,10 @@ let submitting = false;
 function openModal(event) {
   if (!modal) return;
   triggerButton = event?.currentTarget ?? document.querySelector('[data-open-modal]');
+  const selectedDate = event?.currentTarget?.dataset.taskDate;
+  if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+    taskForm.querySelector('[name="due_date"]').value = selectedDate;
+  }
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   frame.inert = true;
@@ -78,6 +82,24 @@ window.addEventListener('pageshow', () => {
   const button = editor?.querySelector('button[type="submit"]');
   if (button) { button.disabled = false; button.textContent = ui.save; }
 });
+const deleteDialog = document.getElementById('delete-dialog');
+let pendingDelete;
+let confirmedDelete;
 document.querySelectorAll('form[data-confirm]').forEach(form => {
-  form.addEventListener('submit', event => { if (!window.confirm(form.dataset.confirm)) event.preventDefault(); });
+  form.addEventListener('submit', event => {
+    if (confirmedDelete === form) { confirmedDelete = null; return; }
+    event.preventDefault();
+    if (!deleteDialog) return; // Fail closed if the confirmation UI is missing.
+    pendingDelete = form;
+    deleteDialog.showModal();
+  });
+});
+deleteDialog?.querySelector('[data-cancel-delete]').addEventListener('click', () => deleteDialog.close());
+deleteDialog?.addEventListener('close', () => { pendingDelete = null; });
+deleteDialog?.querySelector('[data-confirm-delete]').addEventListener('click', () => {
+  const form = pendingDelete;
+  if (!form) return;
+  confirmedDelete = form;
+  deleteDialog.close();
+  form.requestSubmit();
 });

@@ -69,6 +69,15 @@
 .day-load { display:flex; gap:3px; min-height:5px; }
 .day-load i { width:4px; height:4px; border-radius:50%; background:#467850; }
 .week-help { margin:16px 0 0; line-height:1.5; }
+.week-grid .week-day { padding:0 0 8px; gap:0; overflow:hidden; }
+.week-day:hover { outline:none; }
+.day-create { display:flex; flex-direction:column; align-items:center; gap:7px; width:100%; border:0; border-radius:10px 10px 0 0; padding:14px 4px 5px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.day-create > span:first-child { font-size:11px; font-weight:600; }
+.day-create .day-add { font-size:17px; line-height:1; color:#31734b; }
+.day-create:hover { background:#d8eddc; }
+.week-day .day-count { display:flex; align-items:center; justify-content:center; min-height:44px; width:100%; padding:4px 2px; color:inherit; text-underline-offset:3px; }
+.week-day .day-count:hover { background:#e1eee4; }
+.day-create:focus-visible, .week-day .day-count:focus-visible { outline:3px solid #376d4e; outline-offset:-3px; }
 .overdue-link { color:#95501b; font-size:12px; font-weight:600; text-underline-offset:3px; }
 .group-heading { color:#365f46; font-size:13px; margin:24px 0 10px; display:flex; align-items:center; gap:9px; }
 .group-heading span, .completed-group summary span { background:#e8f1e9; padding:3px 7px; border-radius:6px; font-size:11px; }

@@ -95,7 +95,7 @@ class StudyFlowTests(unittest.TestCase):
         self.assertEqual((metrics["overdue"], metrics["completed"], metrics["in_progress"]), (1, 1, 1))
         self.assertEqual(course_progress(self.tasks())[0]["percent"], 33)
         self.assertEqual(task_metrics([])["total_percent"], 0)
-        page = self.client.get("/planner").data
+        page = self.client.get("/planner?view=all").data
         self.assertLess(page.index(b"Overdue</h3>"), page.index(b"Active</h3>"))
         self.assertLess(page.index(b"Active</h3>"), page.index(b"Completed</h3>"))
 
@@ -164,6 +164,35 @@ class StudyFlowTests(unittest.TestCase):
         self.post("/tasks/2/status", status="Done")
         self.assertEqual(weekly_load(self.tasks(), date.today())[0]["count"], 1)
 
+    def test_calendar_dates_select_tasks_and_plus_opens_creation(self):
+        page = self.client.get("/planner").get_data(as_text=True)
+        for offset in range(7):
+            day = (date.today() + timedelta(days=offset)).isoformat()
+            self.assertIn(f'data-open-modal data-task-date="{day}"', page)
+            self.assertIn(f'aria-label="Add a task for {day}"', page)
+            self.assertIn(f'href="/?view=all&amp;day={day}#task-workspace"', page)
+            self.assertIn(f'aria-label="Show tasks for {day}"', page)
+        self.assertEqual(page.count('class="day-add-task"'), 7)
+        self.client.set_cookie("studyflow_language", "ru")
+        self.assertIn("Дата открывает список задач.", self.client.get("/planner").get_data(as_text=True))
+
+    def test_day_view_defaults_new_task_date_but_preserves_validation_draft(self):
+        target = (date.today() + timedelta(days=2)).isoformat()
+        other = (date.today() + timedelta(days=4)).isoformat()
+        page = self.client.get(f"/?day={target}").get_data(as_text=True)
+        self.assertIn(f'name="due_date" value="{target}"', page)
+        self.post(f"/tasks?day={target}", title="", course="CS", due_date=other)
+        page = self.client.get(f"/?day={target}").get_data(as_text=True)
+        self.assertIn(f'name="due_date" value="{other}"', page)
+        page = self.client.get("/?day=not-a-date").get_data(as_text=True)
+        self.assertIn('name="due_date" value=""', page)
+
+    def test_calendar_task_returns_to_planner_with_selected_deadline(self):
+        target = (date.today() + timedelta(days=6)).isoformat()
+        self.assertEqual(self.create(due_date=target, next="planner").location, "/planner")
+        self.assertEqual(self.tasks()[0]["due_date"], target)
+        self.assertEqual(weekly_load(self.tasks(), date.today())[6]["count"], 1)
+
     def test_filters_survive_task_actions(self):
         self.create()
         response = self.post("/tasks/1/status?view=today&course=Computer+Science&q=Database", status="In progress", next="dashboard")
@@ -188,7 +217,61 @@ class StudyFlowTests(unittest.TestCase):
             self.assertIn("Новая задача", text)
         self.post("/language", language="en", return_to="/planner")
         self.assertIn(b'<html lang="en">', self.client.get("/planner").data)
-        self.assertIn(b"Academic planner", self.client.get("/planner").data)
+        self.assertIn(b"Tasks &amp; plan", self.client.get("/planner").data)
+
+    def test_unified_creation_reveals_task_even_from_other_date_or_filter(self):
+        target = (date.today() + timedelta(days=3)).isoformat()
+        response = self.post("/tasks?day=2020-01-01&view=done&q=missing", title="Visible new task", course="CS", due_date=target, workspace="unified")
+        self.assertEqual(response.location, f"/?view=all&day={target}#task-workspace")
+        self.assertIn(b"Visible new task", self.client.get(response.location).data)
+
+    def test_unified_tabs_preserve_date_and_counts_match_visible_scope(self):
+        target = date.today().isoformat()
+        self.create(title="Pending", course="Math")
+        self.create(title="Finished", course="Math")
+        self.create(title="Other course", course="CS")
+        self.post("/tasks/2/status", status="Done")
+        from unittest.mock import patch
+        import app as module
+        original = module.render_template
+        contexts = []
+        def capture(template, **context):
+            contexts.append(context)
+            return original(template, **context)
+        with patch.object(module, "render_template", side_effect=capture):
+            response = self.client.get(f"/?day={target}&course=Math&view=done")
+        self.assertEqual(contexts[-1]["filter_counts"], {"all": 2, "active": 1, "done": 1, "overdue": 0})
+        self.assertEqual([task["title"] for task in contexts[-1]["tasks"]], ["Finished"])
+        self.assertIn(f'view=active&amp;day={target}&amp;q=&amp;course=Math#task-workspace'.encode(), response.data)
+        self.assertIn(b'aria-current="date"', response.data)
+        self.assertIn(b'Save status for Finished', response.data)
+        self.assertNotIn(b'data-auto-submit', response.data)
+
+    def test_legacy_planner_uses_unified_navigation_and_calendar(self):
+        for path in ("/", "/planner"):
+            page = self.client.get(path).get_data(as_text=True)
+            nav = page.split('<nav class="side-nav">')[1].split('</nav>')[0]
+            self.assertEqual(nav.count('<a '), 2)
+            self.assertNotIn('href="/planner"', nav)
+            self.assertIn('id="task-workspace"', page)
+            self.assertIn('class="day-add-task"', page)
+
+    def test_unified_reschedule_reveals_updated_task_and_keeps_status(self):
+        self.create()
+        self.post("/tasks/1/status", status="Done")
+        response = self.post("/tasks/1/edit?day=2020-01-01&view=active", workspace="unified", title="Moved task", course="New course", due_date="2030-01-02")
+        self.assertEqual(response.location, "/?view=all&day=2030-01-02#task-workspace")
+        self.assertIn(b"Moved task", self.client.get(response.location).data)
+        self.assertEqual(self.tasks()[0]["status"], "Done")
+
+    def test_delete_has_accessible_in_app_confirmation(self):
+        self.create()
+        page = self.client.get("/").data
+        self.assertIn(b'<dialog id="delete-dialog"', page)
+        self.assertIn(b'aria-labelledby="delete-heading"', page)
+        self.assertIn(b'data-cancel-delete', page)
+        self.assertIn(b'data-confirm-delete', page)
+        self.assertIn(b'data-confirm=', page)
 
     def test_language_detection_and_cookie_precedence(self):
         response = self.client.get("/", headers={"Accept-Language": "ru-RU,ru;q=0.9,en;q=0.5"})

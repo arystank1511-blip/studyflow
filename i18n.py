@@ -162,6 +162,23 @@ RU = {
 }
 
 RU.update({
+    "Delete task": "Удалить задачу",
+    "This removes the task from your plan. This action cannot be undone.": "Задача будет удалена из плана. Это действие нельзя отменить.",
+    "Tasks & plan": "Задачи и план",
+    "Choose a day, plan your work, and update tasks in one place.": "Выбирайте дату, добавляйте задания и отмечайте готовое — всё в одном месте.",
+    "Show tasks for {date}": "Показать задачи на {date}",
+    "Date = task list. Plus = new task for that date.": "Дата открывает список задач. Кнопка «+» добавляет задачу на этот день.",
+    "All dates": "Все даты",
+    "Tasks for": "Задачи на",
+    "Your tasks": "Ваши задачи",
+    "Date filter": "Дата",
+    "Apply filters": "Применить фильтры",
+    "No tasks in this view. Add one or change the filters.": "Задач пока нет. Добавьте новую или измените фильтры.",
+    "Save": "Сохранить",
+    "Save status for {title}": "Сохранить статус задачи «{title}»",
+    "Task status updated.": "Статус задачи сохранён.",
+    "Add a task for {date}": "Добавить задачу на {date}",
+    "Select a date to add a task. Select the task count to view that day.": "Нажмите на дату, чтобы добавить задачу. На количество задач — чтобы открыть список за день.",
     "Sign in": "Войти",
     "Sign out": "Выйти",
     "YOUR PERSONAL STUDY SPACE": "ЛИЧНОЕ ПРОСТРАНСТВО ДЛЯ УЧЁБЫ",

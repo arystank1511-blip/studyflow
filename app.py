@@ -121,6 +121,7 @@ def weekly_load(tasks, today):
     return [{"date": (today + timedelta(days=offset)).isoformat(),
              "label": "Today" if offset == 0 else (today + timedelta(days=offset)).strftime("%a"),
              "number": (today + timedelta(days=offset)).day,
+             "total": sum(task["due_date"] == (today + timedelta(days=offset)).isoformat() for task in tasks),
              "count": sum(task["status"] != "Done" and task["due_date"] == (today + timedelta(days=offset)).isoformat() for task in tasks)}
             for offset in range(7)]
 
@@ -230,6 +231,12 @@ def index():
                 and (not day or task["due_date"] == day)
                 and (not search or search.casefold() in (task["title"] + " " + task["course"]).casefold()))
     tasks = [task for task in all_items if matches(task)]
+    scope = [task for task in all_items if (not day or task["due_date"] == day)
+             and (not course or task["course"] == course)
+             and (not search or search.casefold() in (task["title"] + " " + task["course"]).casefold())]
+    filter_counts = {"all": len(scope), "active": sum(task["status"] != "Done" for task in scope),
+                     "done": sum(task["status"] == "Done" for task in scope),
+                     "overdue": sum(task["status"] != "Done" and task["due_date"] < today.isoformat() for task in scope)}
     active = [task for task in all_items if task["status"] != "Done"]
     next_task = active[0] if active else None
     metrics = task_metrics(all_items)
@@ -240,20 +247,13 @@ def index():
                            today=today.isoformat(), page="dashboard", view=view, course=course, day=day,
                            courses=sorted({task["course"] for task in all_items}), counts=counts,
                            next_task=next_task, next_label=deadline_label(next_task, today) if next_task else "",
-                           week=weekly_load(all_items, today), filters=workspace_filters())
+                           week=weekly_load(all_items, today), filters=workspace_filters(), filter_counts=filter_counts)
 
 
 @app.route("/planner")
 def planner():
-    tasks = sorted(all_tasks(), key=urgency_key)
-    today = date.today()
-    groups = {"Overdue": [], "Today": [], "Next 6 days": [], "Later": [], "Completed": []}
-    for task in tasks:
-        group = ("Completed" if task["status"] == "Done" else "Overdue" if task["due_date"] < today.isoformat()
-                 else "Today" if task["due_date"] == today.isoformat()
-                 else "Next 6 days" if task["due_date"] <= (today + timedelta(days=6)).isoformat() else "Later")
-        groups[group].append(task)
-    return render_template("planner.html", tasks=tasks, groups=groups, week=weekly_load(tasks, today), metrics=task_metrics(tasks), today=today.isoformat(), page="planner", filters={})
+    # Backward-compatible URL, but only one workspace template and navigation entry.
+    return index()
 
 
 @app.route("/progress")
@@ -301,6 +301,8 @@ def create_task():
         )
         get_db().commit()
     flash("Task added successfully.", "success")
+    if request.form.get("workspace") == "unified":
+        return redirect(url_for("index", view="all", day=values["due_date"], _anchor="task-workspace"))
     return return_to_workspace()
 
 
@@ -321,9 +323,11 @@ def edit_task(task_id):
                              (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], task_id))
             get_db().commit()
         flash("Task updated. Your plan and progress are up to date.", "success")
+        if request.form.get("workspace") == "unified":
+            return redirect(url_for("index", view="all", day=values["due_date"], _anchor="task-workspace"))
         return return_to_workspace()
     back_url = url_for(destination) if destination in {"planner", "progress"} else url_for("index", **workspace_filters())
-    return render_template("edit.html", task=task, values=values, errors=errors, page=destination,
+    return render_template("edit.html", task=task, values=values, errors=errors, page="dashboard" if destination == "planner" else destination,
                            back_url=back_url, filters=workspace_filters()), 400 if errors else 200
 
 
@@ -341,6 +345,7 @@ def update_status(task_id: int):
         if not result.rowcount:
             abort(404)
         db.commit()
+    flash("Task status updated.", "success")
     return return_to_workspace()
 
 

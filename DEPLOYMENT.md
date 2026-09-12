@@ -23,7 +23,7 @@ Without cloud configuration the local app remains in clearly labeled, loopback-o
 ## 3. Vercel
 
 1. Import `arystank1511-blip/studyflow` from GitHub. Give the Vercel integration access to this repository only where possible.
-2. The repository root contains `app.py` and `vercel.json`; choose Flask. Use Python 3.12 (see `pyproject.toml`). Build command: `python build.py`. Leave Output Directory at the framework default. The build copies only static assets to `public/static`.
+2. The repository root contains `app.py` and `vercel.json`; choose Flask. Use Python 3.12 (see `pyproject.toml`). Build command: `python build.py`. Leave Output Directory at the framework default. The build copies only static assets to `public/static`. Functions use Frankfurt (`fra1`) to match the Supabase project region.
 3. Add the following **server environment variables**, separately for Production and any isolated Preview environment:
    - `STUDYFLOW_MODE=cloud`
    - `SUPABASE_URL`
@@ -41,7 +41,7 @@ Missing configuration fails closed: private routes return 503, never the old SQL
 - Sign in with two staging test accounts. Privately set `TEST_ACCESS_TOKEN_A` and `TEST_ACCESS_TOKEN_B` to their access tokens, then run `python verify_cloud.py`. This checks the actual database without application owner filters and cleans up its synthetic tasks. Never log or commit those tokens.
 - Verify email delivery and rejected expired/reused codes. Test logout followed by another account's login, including on a phone.
 - Confirm HTTPS, private/no-store HTML responses, HttpOnly/Secure/SameSite cookies, no authentication tokens in HTML, and no publicly readable `.env` or database files.
-- Verify the three pages and status forms with CSP enabled. Inline JavaScript handlers are not allowed.
+- Verify Tasks & plan, Progress, the legacy `/planner` alias, and status forms with CSP enabled. Inline JavaScript handlers are not allowed.
 - Review Supabase Security Advisor. Confirm RLS on `studyflow_tasks`, no anonymous grants, no extra permissive policies, and no service-role key in Vercel or frontend code.
 - Configure Vercel Firewall rate limits for `/login` and `/login/verify`, provider Auth quotas, spending alerts, and signup monitoring. Provider email/OTP rate limits are essential; the signed-cookie resend cooldown is UX only and can be bypassed by clearing cookies. An attacker can otherwise exhaust shared email limits and delay legitimate sign-ins.
 - This version does not integrate CAPTCHA. For a broadly promoted public site, add Supabase-supported CAPTCHA before removing deployment protection; do not enable it without adding the matching client token flow.
