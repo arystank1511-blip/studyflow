@@ -1,5 +1,5 @@
 {% extends 'layout.html' %}
-{% block title %}{{ t("Progress tracking") }} · StudyFlow{% endblock %}
+{% block title %} StudyFlow{% endblock %}
 {% block dashboard_content %}
 <header class="page-intro"><div><p class="eyebrow">{{ t("PROGRESS TRACKING") }}</p><h1>{{ t("Know where you stand.") }}</h1><p>{{ t("Completed tasks show progress. Remaining tasks show your next move.") }}</p></div></header>
 <section class="completion-overview" aria-label="{{ t("Overall task completion") }}"><div><p class="eyebrow">{{ t("OVERALL COMPLETION") }}</p><strong>{{ metrics.completed_percent }}<span>%</span></strong><p>{{ t('{done} of {total} tasks completed', done=metrics.completed, total=metrics.total) }}</p></div><div class="overall-track"><div class="course-bar" role="progressbar" aria-label="{{ t("Overall task completion") }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ metrics.completed_percent }}"><span style="--progress: {{ metrics.completed_percent }}%"></span></div><p>{{ t("Based on task counts, not grades or study time.") }}</p><a class="edit-link" href="{{ url_for('index', view='active') }}">{{ t("View remaining tasks →") }}</a></div></section>
