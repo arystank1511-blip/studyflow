@@ -306,7 +306,7 @@ def create_task():
     return return_to_workspace()
 
 
-@app.route("/tasks/<int:task_id>/edit", methods=["GET", "POST"])
+@app.route("/tasks/<int(min=1,max=9223372036854775807):task_id>/edit", methods=["GET", "POST"])
 def edit_task(task_id):
     task = cloud_tasks(task_id=task_id)[0] if app.config["CLOUD_MODE"] else get_db().execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if task is None:
@@ -331,7 +331,7 @@ def edit_task(task_id):
                            back_url=back_url, filters=workspace_filters()), 400 if errors else 200
 
 
-@app.post("/tasks/<int:task_id>/status")
+@app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/status")
 def update_status(task_id: int):
     status = request.form.get("status", "To do")
     if status not in {"To do", "In progress", "Done"}:
@@ -349,7 +349,7 @@ def update_status(task_id: int):
     return return_to_workspace()
 
 
-@app.post("/tasks/<int:task_id>/delete")
+@app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/delete")
 def delete_task(task_id: int):
     if app.config["CLOUD_MODE"]:
         cloud_tasks("DELETE", task_id)

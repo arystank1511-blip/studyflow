@@ -5,7 +5,7 @@ title StudyFlow
 
 where py >nul 2>nul
 if errorlevel 1 (
-  echo Python was not found. Install Python 3.11 or newer from python.org, then run this file again.
+  echo Python was not found. Install Python 3.12 or 3.13 from python.org, then run this file again.
   pause
   exit /b 1
 )

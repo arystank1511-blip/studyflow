@@ -39,9 +39,9 @@ Do not advertise this as a penetration-tested production service.
 
 ## Verification
 
-- 43 offline regression tests: task flows, unified calendar/list navigation, RU/EN, CSRF including malformed Unicode,
+- Offline regression suite (`python -m unittest -v`): task flows, unified calendar/list navigation, RU/EN, CSRF including malformed Unicode,
   server-validated identity, expired sessions, password signup/login and validation, cookie flags, account owner filters,
-  foreign IDs, escaping, unsafe redirects, host validation, and cloud-outage fail-closed behavior.
+  foreign/out-of-range IDs, malformed cloud configuration, escaping, unsafe redirects, host validation, and cloud-outage fail-closed behavior.
 - Cloud tests mock Supabase; they test application behavior, not the deployed RLS engine.
   Run `verify_cloud.py` with two staging accounts to test real policies before publication.
 - Dependency audit initially flagged Flask 3.1.2 (PYSEC-2026-2151) and python-dotenv 1.1.1

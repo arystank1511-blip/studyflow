@@ -19,17 +19,24 @@ class CloudError(Exception):
 
 
 def valid_config(url, key):
+    if not isinstance(url, str) or not isinstance(key, str):
+        return False
     try:
         parsed = urlsplit(url)
         valid_url = (parsed.scheme == "https" and parsed.hostname and
-                     parsed.hostname.endswith(".supabase.co") and not parsed.username and
+                     re.fullmatch(r"[a-z0-9-]+\.supabase\.co", parsed.hostname) and not parsed.username and
                      not parsed.password and parsed.port in (None, 443) and parsed.path in ("", "/") and
                      not parsed.query and not parsed.fragment)
         if key.startswith("sb_publishable_"):
-            valid_key = True
+            valid_key = len(key) > len("sb_publishable_")
         else:
-            payload = key.split(".")[1]
-            valid_key = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))).get("role") == "anon"
+            parts = key.split(".")
+            if len(parts) != 3 or not all(parts):
+                return False
+            payload = parts[1]
+            decoded = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4), altchars=b"-_", validate=True))
+            # This only checks the configured key type; Supabase validates the key.
+            valid_key = isinstance(decoded, dict) and decoded.get("role") == "anon"
         return bool(valid_url and valid_key)
     except (ValueError, IndexError, TypeError, UnicodeDecodeError):
         return False
