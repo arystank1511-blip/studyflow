@@ -116,6 +116,19 @@ class StudyFlowTests(unittest.TestCase):
         self.assertEqual(self.tasks()[0]["status"], "To do")
         self.assertIn(b"Invalid task status", self.client.get("/planner").data)
 
+    def test_invalid_task_ids_return_404_without_changing_data(self):
+        self.create()
+        for task_id in (0, -1, 2**63 - 1, 2**63, 10**100):
+            with self.subTest(task_id=task_id):
+                self.assertEqual(self.client.get(f"/tasks/{task_id}/edit").status_code, 404)
+                for action in ("edit", "status", "delete"):
+                    response = self.post(f"/tasks/{task_id}/{action}", title="Changed", course="CS",
+                                         due_date="2030-01-01", status="Done")
+                    self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(self.tasks()), 1)
+        self.assertEqual(self.tasks()[0]["status"], "To do")
+        self.assertEqual(self.tasks()[0]["title"], "Database assignment")
+
     def test_edit_keeps_status_and_updates_course_progress(self):
         self.create()
         self.post("/tasks/1/status", status="Done")

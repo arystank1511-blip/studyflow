@@ -2,6 +2,8 @@
 
 StudyFlow is a lightweight web application that helps students organise assignments, keep track of deadlines, and see their academic progress at a glance.
 
+**Owner and maintainer:** [Arystan Kabdesh](https://github.com/arystank1511-blip)
+
 ## Why I built it
 
 An educational portfolio project by Arystan Kabdesh, developed with AI coding assistance. It explores server-side routing, task workflows, relational data storage, input validation, and responsive UI design through a practical student planner.
@@ -31,21 +33,21 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 
 ## Tech stack
 
-- Python 3.11 or newer
+- Python 3.12 or 3.13
 - Flask
 - SQLite for private local use; Supabase PostgreSQL + Auth for cloud use
 - HTML, CSS, and vanilla JavaScript
 
 ## Run locally
 
-On Windows, the easiest option is to double-click `run.bat`. It creates a virtual environment, installs Flask, and opens the project in your browser.
+On Windows, the easiest option is to double-click `run.bat`. It creates a virtual environment, installs the dependencies, and opens the project in your browser.
 
 Or use the commands below:
 
 ```bash
 git clone https://github.com/arystank1511-blip/studyflow.git
 cd studyflow
-py -3 -m venv .venv
+py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe app.py
 ```
@@ -54,7 +56,7 @@ Open `http://127.0.0.1:5000` in your browser.
 
 The SQLite database is created on first launch. Your tasks stay on your computer and are excluded from Git. The Golos Text font is loaded from Google Fonts; an offline browser uses a sans-serif fallback.
 
-On macOS/Linux, use `python3 -m venv .venv`, `.venv/bin/python -m pip install -r requirements.txt`, then `.venv/bin/python app.py`.
+On macOS/Linux with Python 3.12 or 3.13, use `python3 -m venv .venv`, `.venv/bin/python -m pip install -r requirements.txt`, then `.venv/bin/python app.py`.
 
 ## Tests
 
@@ -62,7 +64,11 @@ On macOS/Linux, use `python3 -m venv .venv`, `.venv/bin/python -m pip install -r
 .venv\Scripts\python.exe -m unittest -v
 ```
 
-Tests use temporary databases and cover task creation, status updates, deletion, validation, search, filtering, deadline ordering, course progress, CSRF rejection, and HTML escaping.
+On macOS/Linux, run `.venv/bin/python -m unittest -v`.
+
+GitHub Actions runs the suite on Python 3.12 and 3.13, on both Ubuntu and Windows, for pull requests and pushes to `main`. The checks use temporary SQLite databases and mocked cloud responses; no Supabase account, production credentials, or user data is needed.
+
+Tests use temporary databases and cover task creation, status updates, deletion, validation, search, filtering, deadline ordering, course progress, CSRF rejection, malformed configuration, invalid task IDs, and HTML escaping. Cloud tests are offline mocks; they do not verify deployed RLS policies.
 
 ## Scope and configuration
 
@@ -79,7 +85,7 @@ Copy `.env.example` to a private `.env` for local cloud configuration. Never com
 
 ## Future improvements
 
-- Calendar view and reminders
+- Task reminders and calendar export
 - Account export/deletion, CAPTCHA integration, and operational monitoring
 
 ## Author

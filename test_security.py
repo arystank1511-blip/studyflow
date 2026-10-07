@@ -1,4 +1,6 @@
 """Offline security regression tests. Real Supabase RLS needs the separate SQL test."""
+import base64
+import json
 import unittest
 from unittest.mock import patch
 
@@ -210,6 +212,21 @@ class CloudSecurityTests(unittest.TestCase):
             self.assertFalse(valid_config("https://test.supabase.co", key))
         for url in ("http://test.supabase.co", "https://evil.com", "http://127.0.0.1", "https://test.supabase.co@evil.com", "https://test.supabase.co/path"):
             self.assertFalse(valid_config(url, "sb_publishable_example"))
+
+    def test_malformed_cloud_configuration_fails_closed(self):
+        url = "https://test.supabase.co"
+        for payload in ([], None, 1, "anon", {"role": "service_role"}):
+            encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+            with self.subTest(payload=payload):
+                self.assertFalse(valid_config(url, f"header.{encoded}.signature"))
+        for key in (None, 123, [], "sb_publishable_", "header.e30.signature", "header.%.signature"):
+            with self.subTest(key=key):
+                self.assertFalse(valid_config(url, key))
+        for value in (None, 123, [], "https://.supabase.co"):
+            with self.subTest(url=value):
+                self.assertFalse(valid_config(value, "sb_publishable_test"))
+        encoded = base64.urlsafe_b64encode(b'{"role":"anon"}').decode().rstrip("=")
+        self.assertTrue(valid_config(url, f"header.{encoded}.signature"))
 
     def test_http_transport_no_redirects_and_no_error_body_leak(self):
         response = httpx.Response(400, text="SECRET_TOKEN database internals", request=httpx.Request("GET", "https://test.supabase.co"))
