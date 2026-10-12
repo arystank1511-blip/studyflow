@@ -224,6 +224,16 @@ RU.update({
     "Forbidden": "Доступ запрещён",
     "Internal Server Error": "Ошибка сервера",
     "Service Unavailable": "Сервис временно недоступен",
+    "Mark {title} as done": "Отметить «{title}» выполненной",
+    "Reopen {title}": "Вернуть «{title}» в работу",
+    "Mark done": "Готово",
+    "Reopen": "Вернуть",
+    "YOUR DATA": "ВАШИ ДАННЫЕ",
+    "Take your deadlines with you": "Сроки — в вашем календаре",
+    "Add unfinished tasks to Google Calendar, Apple Calendar or Outlook with a reminder the day before, or download a full copy of your tasks.": "Добавьте незавершённые задачи в Google Календарь, Apple Календарь или Outlook с напоминанием за день, или скачайте полную копию своих задач.",
+    "Download calendar (.ics)": "Скачать календарь (.ics)",
+    "Export tasks (JSON)": "Экспорт задач (JSON)",
+    "Dark theme": "Тёмная тема",
 })
 
 

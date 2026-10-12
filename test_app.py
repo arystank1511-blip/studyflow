@@ -324,6 +324,54 @@ class StudyFlowTests(unittest.TestCase):
             self.assertEqual([task_count(n) for n in (0, 1, 2, 5, 11, 21, 24)],
                              ["0 задач", "1 задача", "2 задачи", "5 задач", "11 задач", "21 задача", "24 задачи"])
 
+    def test_today_follows_browser_timezone_and_rejects_bad_names(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from app import user_today
+        for zone in ("Pacific/Kiritimati", "Etc/GMT+12", "Asia/Almaty"):
+            with self.subTest(zone=zone), app.test_request_context(headers={"Cookie": f"studyflow_tz={zone}"}):
+                self.assertEqual(user_today(), datetime.now(ZoneInfo(zone)).date())
+        for zone in ("../../etc/passwd", "Not/AZone", "x" * 80, ""):
+            with self.subTest(zone=zone), app.test_request_context(headers={"Cookie": f"studyflow_tz={zone}"}):
+                self.assertEqual(user_today(), date.today())
+
+    def test_quick_done_toggle_and_page_title(self):
+        self.create()
+        task_id = self.tasks()[0]["id"]
+        page = self.client.get("/").data
+        self.assertIn(b'class="quick-done-form"', page)
+        self.assertIn(b'name="status" value="Done"', page)
+        self.post(f"/tasks/{task_id}/status", status="Done")
+        self.assertIn(b'name="status" value="To do"', self.client.get("/?view=all").data)
+        self.assertIn(b"<title>Progress tracking", self.client.get("/progress").data)
+
+    def test_calendar_export_lists_unfinished_tasks_with_reminders(self):
+        self.create(title="Essay; draft, v2", notes="Line one\nLine two", due_date="2026-11-03", priority="High")
+        self.create(title="Finished lab", due_date="2026-11-04")
+        self.post(f"/tasks/{self.tasks()[1]['id']}/status", status="Done")
+        response = self.client.get("/calendar.ics")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/calendar")
+        self.assertIn("attachment", response.headers["Content-Disposition"])
+        body = response.get_data(as_text=True)
+        self.assertTrue(body.startswith("BEGIN:VCALENDAR\r\n") and body.endswith("END:VCALENDAR\r\n"))
+        unfolded = body.replace("\r\n ", "")
+        self.assertIn("SUMMARY:Essay\\; draft\\, v2 · Computer Science", unfolded)
+        self.assertIn("DESCRIPTION:Line one\\nLine two", unfolded)
+        self.assertIn("DTSTART;VALUE=DATE:20261103", body)
+        self.assertIn("TRIGGER:-PT15H", body)
+        self.assertNotIn("Finished lab", body)
+        self.assertTrue(all(len(line.encode()) <= 75 for line in body.split("\r\n")))
+
+    def test_json_export_contains_all_tasks(self):
+        import json
+        self.create(title="Отчёт по физике")
+        response = self.client.get("/export.json")
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.get_data(as_text=True))
+        self.assertEqual(data["tasks"][0]["title"], "Отчёт по физике")
+        self.assertEqual(set(data["tasks"][0]), {"id", "title", "course", "due_date", "priority", "status", "notes", "created_at"})
+
 
 if __name__ == "__main__":
     unittest.main()

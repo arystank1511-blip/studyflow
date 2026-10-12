@@ -103,3 +103,77 @@ deleteDialog?.querySelector('[data-confirm-delete]').addEventListener('click', (
   deleteDialog.close();
   form.requestSubmit();
 });
+
+// Remember the browser timezone so the server knows which day is "today" for this student.
+try {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (zone && /^[A-Za-z0-9_+\-]+(\/[A-Za-z0-9_+\-]+)*$/.test(zone) && !document.cookie.split('; ').includes('studyflow_tz=' + zone)) {
+    document.cookie = 'studyflow_tz=' + zone + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '');
+  }
+} catch { /* Older browsers fall back to the server timezone. */ }
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Theme toggle: explicit choice wins over the system preference.
+const themeToggle = document.querySelector('[data-theme-toggle]');
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => (document.documentElement.dataset.theme ?? (darkQuery.matches ? 'dark' : 'light')) === 'dark';
+const syncThemeButton = () => themeToggle?.setAttribute('aria-pressed', String(isDark()));
+syncThemeButton();
+darkQuery.addEventListener('change', syncThemeButton);
+themeToggle?.addEventListener('click', () => {
+  const next = isDark() ? 'light' : 'dark';
+  const apply = () => { document.documentElement.dataset.theme = next; syncThemeButton(); };
+  try { localStorage.setItem('studyflow-theme', next); } catch { /* Choice lasts for this page only. */ }
+  if (document.startViewTransition && !reduceMotion) quietTransition(document.startViewTransition(apply)); else apply();
+});
+
+// A skipped or timed-out transition is harmless; keep it out of the console.
+function quietTransition(transition) {
+  transition?.ready.catch(() => {});
+  transition?.finished.catch(() => {});
+}
+window.addEventListener('pagereveal', event => quietTransition(event.viewTransition));
+window.addEventListener('pageswap', event => quietTransition(event.viewTransition));
+
+// Staggered entrance order for lists.
+document.querySelectorAll('.work-task-list, .course-list, .week-grid').forEach(list => {
+  Array.from(list.children).forEach((item, index) => item.style.setProperty('--i', index));
+});
+
+// Count percentages up from zero.
+document.querySelectorAll('.completion-overview strong, .course-progress-head > strong').forEach(element => {
+  const node = Array.from(element.childNodes).find(child => child.nodeType === Node.TEXT_NODE && /\d/.test(child.textContent));
+  const target = parseInt(node?.textContent, 10);
+  if (!node || Number.isNaN(target) || reduceMotion) return;
+  const suffix = node.textContent.replace(/^\s*\d+/, '');
+  const started = performance.now();
+  const step = now => {
+    const progress = Math.min(1, (now - started) / 1100);
+    node.textContent = Math.round(target * (1 - Math.pow(1 - progress, 3))) + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  node.textContent = '0' + suffix;
+  requestAnimationFrame(step);
+});
+
+// One-click completion plays its check animation before the page reloads.
+document.querySelectorAll('.quick-done-form').forEach(form => {
+  form.addEventListener('submit', event => {
+    const card = form.closest('.work-task');
+    if (reduceMotion || !card || form.dataset.animated || card.classList.contains('is-done')) return;
+    event.preventDefault();
+    form.dataset.animated = 'true';
+    card.classList.add('is-completing');
+    form.querySelector('button').disabled = true;
+    setTimeout(() => HTMLFormElement.prototype.submit.call(form), 520);
+  });
+});
+
+// Success messages step aside after a few seconds; errors stay until the next action.
+document.querySelectorAll('.flash.success').forEach(message => {
+  setTimeout(() => {
+    message.classList.add('is-leaving');
+    message.addEventListener('animationend', () => message.remove(), { once: true });
+  }, reduceMotion ? 6000 : 4200);
+});
