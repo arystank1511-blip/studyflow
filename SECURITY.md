@@ -9,12 +9,17 @@ Do not advertise this as a penetration-tested production service.
 
 ## Implemented protections
 
-- Auth is delegated to Supabase email/password. Passwords are forwarded over HTTPS and
+- Auth is delegated to Supabase: password, one-time email code, password reset by code,
+  and optional Google sign-in with PKCE. Passwords and codes are forwarded over HTTPS and
   are never stored in the StudyFlow database, session, logs or rendered HTML.
-- Email confirmation is intentionally disabled with explicit owner consent. Email addresses
-  are unverified login identifiers; Supabase auto-confirms them internally. A timestamp is
-  not proof of mailbox ownership. Account identity is always the server-validated UUID,
-  never the email address. No SMTP, OTP, social sign-in or recovery flow is offered.
+- Email confirmation is required: new accounts are confirmed with a code from the mailbox,
+  and sessions without `email_confirmed_at` are rejected. Account identity is always the
+  server-validated UUID, never the email address.
+- Signup, code requests and password reset answer the same way whether or not an address is
+  registered, so the forms cannot be used to discover accounts. A repeated code request
+  within 60 seconds is refused before it reaches the provider (Supabase applies its own limits too).
+- The Google flow stores the PKCE verifier only in the signed session and uses it once, so a
+  code obtained in another browser cannot sign anyone in (login CSRF).
 - Access tokens are verified against `/auth/v1/user`. New passwords require at least
   15 characters and at most 72 UTF-8 bytes to avoid bcrypt truncation. The provider's
   minimum length is also 15; changing a password requires the current password.
@@ -56,9 +61,9 @@ must be tested against the deployed service. Configure provider signup/password 
 Vercel rate limits, spending alerts, backups, and preview isolation. This version has no CAPTCHA
 integration or per-account task storage quota; do not broadly open signup without anti-abuse
 controls. Supabase's direct Auth API must also remain protected by provider throttling.
-Unverified addresses permit impersonation and pre-registration of someone else's address.
-Never merge social identities, add email-based trust, or enable password recovery later
-without a reviewed mailbox-verification and existing-account migration policy.
+Accounts created before email confirmation was enabled were auto-confirmed by Supabase and
+are not proof of mailbox ownership; review them before relying on email identity (for example
+before linking Google accounts by email).
 
 The CSP still permits inline **styles** for task/progress widths (not inline JavaScript).
 The app does not encrypt task text end-to-end: trusted database/project administrators can read it.

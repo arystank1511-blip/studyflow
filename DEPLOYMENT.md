@@ -7,12 +7,15 @@ Do not treat offline mocks as proof that a real database has RLS enabled.
 
 1. Create a project in your own account. Choose a suitable region and store the database password in your password manager, not in Git or chat. Stay on a free plan unless you decide otherwise.
 2. Execute `supabase/schema.sql` once in the SQL Editor. It creates a dedicated table, constraints, and owner-only row-level policies. It intentionally fails if that table already exists, instead of overwriting data.
-3. This deployment intentionally uses email/password without email verification, explicitly approved by the owner. In Authentication → Sign In / Providers disable **Confirm email**, keep **Email** enabled, and keep anonymous sign-ins and manual identity linking disabled. A Supabase `email_confirmed_at` value is automatically assigned in this mode and does not establish mailbox ownership. Do not enable social login or merge identities by email without a separate verification/migration design.
-4. Set minimum password length to 15 and require the current password for updates in the Email provider. Keep provider Auth rate limits enabled. No SMTP is required for these password-only signup/login routes. Confirmation, magic links and password-recovery mail are not offered; do not promise account recovery based solely on an unverified email address.
-5. Get the project URL and **publishable** key (or legacy **anon** key). This app deliberately rejects a service-role/secret key. The service-role key bypasses RLS and must not be used.
-6. Set the Auth Site URL to the final HTTPS Vercel URL. No wildcard redirect URLs are needed for password login.
+3. Email addresses are verified with one-time codes. In Authentication → Sign In / Providers → Email turn **Confirm email** ON, keep anonymous sign-ins and manual identity linking disabled.
+4. Set minimum password length to 15 in the Email provider and keep Auth rate limits enabled.
+5. **Custom SMTP is required.** Supabase's built-in sender only delivers to project team members and at a very low hourly rate. In Authentication → Emails → SMTP Settings connect a provider (for example Resend, Brevo or Postmark) with a verified sending domain.
+6. **Email templates must contain the code.** StudyFlow asks for a code instead of following a link. In Authentication → Emails → Templates put `{{ .Token }}` into **Confirm signup**, **Magic Link** and **Reset Password**, e.g. `Ваш код StudyFlow: <b>{{ .Token }}</b>. Он действует 1 час.` Remove the `{{ .ConfirmationURL }}` link so nobody follows a link that this app does not handle.
+7. Optional Google sign-in: create an OAuth client in Google Cloud, enable the Google provider in Supabase with it, add `https://<your-domain>/auth/callback` to Authentication → URL Configuration → Redirect URLs, then set `STUDYFLOW_GOOGLE_LOGIN=1` on Vercel. Leave it unset until all of that is done; the button stays hidden.
+8. Get the project URL and **publishable** key (or legacy **anon** key). This app deliberately rejects a service-role/secret key. The service-role key bypasses RLS and must not be used.
+9. Set the Auth Site URL to the final HTTPS Vercel URL. Do not add wildcard redirect URLs.
 
-StudyFlow forwards passwords only to Supabase over HTTPS; Supabase manages password hashing and auth sessions. Passwords never enter the application database, cookies, templates or logs. There is no self-service recovery in this version. Anyone can register an unused address they do not own, so treat it only as a login identifier.
+StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase manages password hashing, codes and auth sessions. They never enter the application database, cookies, templates or logs. Sign-in options: password, one-time email code (creates the account on first use), password reset by code, and Google (PKCE) when enabled.
 
 ## 2. Local cloud smoke test
 
@@ -39,7 +42,7 @@ Missing configuration fails closed: private routes return 503, never the old SQL
 ## 4. Required pre-publication checks
 
 - Sign in with two staging test accounts. Privately set `TEST_ACCESS_TOKEN_A` and `TEST_ACCESS_TOKEN_B` to their access tokens, then run `python verify_cloud.py`. This checks the actual database without application owner filters and cleans up its synthetic tasks. Never log or commit those tokens.
-- Verify signup, duplicate signup, wrong passwords, password length enforcement, provider throttling, and logout followed by another account's login, including on a phone. Confirm there are no OTP, social login or misleading password-recovery buttons.
+- Verify signup with the emailed code, sign-in by code, password reset by code, wrong and expired codes, duplicate signup (must look identical to a new one), wrong passwords, provider throttling, Google sign-in if enabled, and logout followed by another account's login, including on a phone.
 - Confirm HTTPS, private/no-store HTML responses, HttpOnly/Secure/SameSite cookies, no authentication tokens in HTML, and no publicly readable `.env` or database files.
 - Verify Tasks & plan, Progress, the legacy `/planner` alias, and status forms with CSP enabled. Inline JavaScript handlers are not allowed.
 - Review Supabase Security Advisor. Confirm RLS on `studyflow_tasks`, no anonymous grants, no extra permissive policies, and no service-role key in Vercel or frontend code.

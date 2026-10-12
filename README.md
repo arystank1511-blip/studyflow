@@ -28,7 +28,7 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Russian / English switch, remembered for one year; first visit follows the browser language
 - Localized dates, task statuses, validation messages, and deletion confirmation; user-entered task text stays unchanged
 - Keyboard-accessible task dialog, inline validation, and protected POST forms
-- Cloud mode: Supabase PostgreSQL, email/password registration and sign-in, account-owned tasks, and logout
+- Cloud mode: Supabase PostgreSQL, verified email accounts (password, email code or Google), password reset, account-owned tasks, and logout
 - One-click **Done / Reopen** button on every task card, with a check animation
 - Calendar export (`/calendar.ics`): unfinished tasks as all-day events with a reminder at 09:00 the day before — works with Google Calendar, Apple Calendar and Outlook
 - Data export (`/export.json`): a full copy of your tasks
@@ -81,13 +81,14 @@ Tests use temporary databases and cover task creation, status updates, deletion,
 
 StudyFlow has two deliberately separate modes. Local mode keeps the existing SQLite workspace on loopback only. Cloud mode requires Supabase Auth and PostgreSQL with the supplied RLS policies. On Vercel, cloud mode is mandatory and missing configuration fails closed. Publishing the source to GitHub does not host the backend. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup and required live checks; see [SECURITY.md](SECURITY.md) for tested protections and limits.
 
-Copy `.env.example` to a private `.env` for local cloud configuration. Never commit real secrets. Cloud registration/login uses email and password through Supabase Auth. Email confirmation is intentionally disabled at the owner's request: addresses are unverified identifiers, not proof of mailbox ownership. No confirmation or password-reset emails are offered. Use your own address and save your password in a password manager. New passwords require at least 15 characters and no more than 72 UTF-8 bytes.
+Copy `.env.example` to a private `.env` for local cloud configuration. Never commit real secrets. Cloud accounts use Supabase Auth: password, a one-time code sent to the email (no password needed), password reset by code, and optional Google sign-in. New accounts confirm their email with a code. New passwords require at least 15 characters and no more than 72 UTF-8 bytes. Supabase needs custom SMTP and code-based email templates — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 - `STUDYFLOW_DATABASE`: optional SQLite path (default: `studyflow.db` beside `app.py`).
 - `STUDYFLOW_SECRET_KEY`: optional stable session secret, supplied through the environment. Otherwise a fresh secret is generated at startup and open forms must be reloaded after a restart.
 - `STUDYFLOW_DEBUG=1`: opt in to the local debugger and reloader. Disabled by default.
 - `STUDYFLOW_MODE=cloud`: enable Supabase authentication and cloud storage.
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`: Supabase project connection (never a service-role key).
+- `STUDYFLOW_GOOGLE_LOGIN=1`: show "Continue with Google" once the provider is configured in Supabase.
 - `STUDYFLOW_TIMEZONE`: optional fallback timezone such as `Asia/Almaty`, used before the browser has reported its own.
 - `STUDYFLOW_ALLOWED_HOSTS`: exact production hostnames; Vercel deployment hostnames are added automatically.
 

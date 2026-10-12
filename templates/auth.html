@@ -1,43 +1,104 @@
 {% extends 'base.html' %}
-{% block title %}{{ t('Create account') if signup else t('Sign in') }} · StudyFlow{% endblock %}
+{% set titles = {'login': 'Sign in', 'register': 'Create account', 'code': 'Sign in with a code', 'verify': 'Check your email', 'forgot': 'Reset password', 'reset': 'Choose a new password'} %}
+{% block title %}{{ t(titles[mode]) }} · StudyFlow{% endblock %}
 {% block content %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endmacro %}
+{% macro password_fields(autocomplete) %}
+  <label for="auth-password">{{ t('Password') }}</label>
+  <input id="auth-password" type="password" name="password" autocomplete="{{ autocomplete }}" minlength="15" maxlength="72" required aria-describedby="password-help{% if error %} auth-error{% endif %}">
+  <small id="password-help">{{ t('Use at least 15 characters and at most 72 UTF-8 bytes.') }}</small>
+  <label for="auth-password-confirm">{{ t('Repeat password') }}</label>
+  <input id="auth-password-confirm" type="password" name="password_confirm" autocomplete="new-password" minlength="15" maxlength="72" required>
+{% endmacro %}
+{% macro email_field(autocomplete='username') %}
+  <label for="auth-email">{{ t('Email address') }}</label>
+  <input id="auth-email" type="email" name="email" autocomplete="{{ autocomplete }}" maxlength="254" value="{{ email }}" placeholder="you@example.com" required>
+{% endmacro %}
+{% macro code_field() %}
+  <label for="auth-code">{{ t('Code from the email') }}</label>
+  <input id="auth-code" class="code-input" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,12}" maxlength="12" required aria-describedby="code-help{% if error %} auth-error{% endif %}">
+  <small id="code-help">{{ t('We sent it to {email}. It expires soon; check spam if you do not see it.', email=email) }}</small>
+{% endmacro %}
 <main class="auth-shell" id="main-content">
   <div class="auth-heading">
     <a class="brand" href="{{ url_for('index') }}"><img class="brand-symbol" src="{{ url_for('static', filename='brand-mark.svg') }}" width="36" height="36" alt=""><span class="brand-wordmark" translate="no">study<span>flow</span></span></a>
     <div class="auth-heading-actions"><button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="{{ t('Dark theme') }}" title="{{ t('Dark theme') }}"><svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
     <form class="language-switch" method="post" action="{{ url_for('change_language') }}" aria-label="{{ t('Language') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="return_to" value="{{ request.path }}">
+      {{ csrf() }}<input type="hidden" name="return_to" value="{{ request.path }}">
       <button name="language" value="ru" lang="ru" aria-label="Русский" aria-pressed="{{ 'true' if lang == 'ru' else 'false' }}">RU</button><button name="language" value="en" lang="en" aria-label="English" aria-pressed="{{ 'true' if lang == 'en' else 'false' }}">EN</button>
     </form>
     </div>
   </div>
   <section class="auth-card" aria-labelledby="auth-title">
     <p class="eyebrow">{{ t('YOUR PERSONAL STUDY SPACE') }}</p>
-    <h1 id="auth-title">{{ t('Create your study space.') if signup else t('Welcome back.') }}</h1>
+    <h1 id="auth-title">{{ t({'login': 'Welcome back.', 'register': 'Create your study space.', 'code': 'Sign in without a password.', 'verify': 'Check your email', 'forgot': 'Forgot your password?', 'reset': 'Choose a new password'}[mode]) }}</h1>
     {% if not ready %}
       <p>{{ t('Cloud sign-in is not connected yet. Your existing tasks remain on this computer.') }}</p>
       <a class="primary" href="{{ url_for('index') }}">{{ t('Return to dashboard') }}</a>
     {% else %}
-      <nav class="auth-tabs" aria-label="{{ t('Account access') }}">
-        <a href="{{ url_for('login') }}" {% if not signup %}aria-current="page"{% endif %}>{{ t('Sign in') }}</a>
-        <a href="{{ url_for('register') }}" {% if signup %}aria-current="page"{% endif %}>{{ t('Create account') }}</a>
-      </nav>
-      <p>{{ t('Create an account with your email and a strong password.') if signup else t('Sign in with your email and password.') }}</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<p class="flash {{ category }}" role="status">{{ t(message) }}</p>{% endfor %}{% endwith %}
       {% if error %}<p class="flash error" id="auth-error" role="alert">{{ t(error) }}</p>{% endif %}
-      <form method="post" class="auth-form" action="{{ url_for('register') if signup else url_for('login') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="auth-email">{{ t('Email address') }}</label>
-        <input id="auth-email" type="email" name="email" autocomplete="username" maxlength="254" value="{{ email }}" placeholder="you@example.com" required>
-        <label for="auth-password">{{ t('Password') }}</label>
-        <input id="auth-password" type="password" name="password" autocomplete="{{ 'new-password' if signup else 'current-password' }}" {% if signup %}minlength="15"{% endif %} maxlength="72" required aria-describedby="password-help{% if error %} auth-error{% endif %}">
-        <small id="password-help">{{ t('Use at least 15 characters and at most 72 UTF-8 bytes.') if signup else t('Enter the password you chose when registering.') }}</small>
-        {% if signup %}
-          <label for="auth-password-confirm">{{ t('Repeat password') }}</label>
-          <input id="auth-password-confirm" type="password" name="password_confirm" autocomplete="new-password" minlength="15" maxlength="72" required>
+
+      {% if mode in ['login', 'register'] %}
+        <nav class="auth-tabs" aria-label="{{ t('Account access') }}">
+          <a href="{{ url_for('login') }}" {% if mode == 'login' %}aria-current="page"{% endif %}>{{ t('Sign in') }}</a>
+          <a href="{{ url_for('register') }}" {% if mode == 'register' %}aria-current="page"{% endif %}>{{ t('Create account') }}</a>
+        </nav>
+        {% if google %}
+          <a class="secondary auth-provider" href="{{ url_for('google_login') }}"><span class="google-mark" aria-hidden="true">G</span>{{ t('Continue with Google') }}</a>
         {% endif %}
-        <button class="primary" type="submit">{{ t('Create account') if signup else t('Sign in') }} <span aria-hidden="true">→</span></button>
-      </form>
-      <p class="auth-footnote">{{ t('Email ownership is not verified. Use your own address. No confirmation or password-reset emails are sent. Save your password in a password manager.') }}</p>
+        <a class="secondary auth-provider" href="{{ url_for('login_code') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M3 7l9 6 9-6"/></svg>{{ t('Get a code by email') }}</a>
+        <p class="auth-divider"><span>{{ t('or with a password') }}</span></p>
+        <form method="post" class="auth-form" action="{{ url_for(mode) }}">
+          {{ csrf() }}
+          {{ email_field() }}
+          {% if mode == 'register' %}
+            {{ password_fields('new-password') }}
+          {% else %}
+            <label for="auth-password">{{ t('Password') }}</label>
+            <input id="auth-password" type="password" name="password" autocomplete="current-password" maxlength="72" required{% if error %} aria-describedby="auth-error"{% endif %}>
+          {% endif %}
+          <button class="primary" type="submit">{{ t('Create account') if mode == 'register' else t('Sign in') }} <span aria-hidden="true">→</span></button>
+        </form>
+        {% if mode == 'login' %}<a class="auth-link" href="{{ url_for('forgot_password') }}">{{ t('Forgot your password?') }}</a>{% endif %}
+        <p class="auth-footnote">{{ t('We confirm your email with a one-time code. Your tasks stay private to your account.') }}</p>
+
+      {% elif mode == 'code' %}
+        <p>{{ t('Enter your email and we will send a one-time code. A new account is created automatically.') }}</p>
+        <form method="post" class="auth-form" action="{{ url_for('login_code') }}">
+          {{ csrf() }}{{ email_field('email') }}
+          <button class="primary" type="submit">{{ t('Send the code') }} <span aria-hidden="true">→</span></button>
+        </form>
+        <a class="auth-link" href="{{ url_for('login') }}">{{ t('Sign in with a password') }}</a>
+
+      {% elif mode == 'verify' %}
+        <form method="post" class="auth-form" action="{{ url_for('verify_login') }}">
+          {{ csrf() }}{{ code_field() }}
+          <button class="primary" type="submit">{{ t('Confirm and sign in') }} <span aria-hidden="true">→</span></button>
+        </form>
+        <form method="post" class="auth-resend" action="{{ url_for('login_code') }}">
+          {{ csrf() }}<input type="hidden" name="email" value="{{ email }}">
+          <button class="auth-link" type="submit">{{ t('Send a new code') }}</button>
+        </form>
+        <a class="auth-link" href="{{ url_for('login_code') }}">{{ t('Use another email') }}</a>
+
+      {% elif mode == 'forgot' %}
+        <p>{{ t('Enter the email you registered with. We will send a code to set a new password.') }}</p>
+        <form method="post" class="auth-form" action="{{ url_for('forgot_password') }}">
+          {{ csrf() }}{{ email_field() }}
+          <button class="primary" type="submit">{{ t('Send the code') }} <span aria-hidden="true">→</span></button>
+        </form>
+        <a class="auth-link" href="{{ url_for('login') }}">{{ t('Back to sign in') }}</a>
+
+      {% elif mode == 'reset' %}
+        <form method="post" class="auth-form" action="{{ url_for('reset_password') }}">
+          {{ csrf() }}<input type="hidden" name="email" value="{{ email }}" autocomplete="username">
+          {{ code_field() }}
+          {{ password_fields('new-password') }}
+          <button class="primary" type="submit">{{ t('Save the new password') }} <span aria-hidden="true">→</span></button>
+        </form>
+        <a class="auth-link" href="{{ url_for('forgot_password') }}">{{ t('Send a new code') }}</a>
+      {% endif %}
     {% endif %}
   </section>
 </main>
