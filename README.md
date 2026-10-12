@@ -29,6 +29,13 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Localized dates, task statuses, validation messages, and deletion confirmation; user-entered task text stays unchanged
 - Keyboard-accessible task dialog, inline validation, and protected POST forms
 - Cloud mode: Supabase PostgreSQL, email/password registration and sign-in, account-owned tasks, and logout
+- One-click **Done / Reopen** button on every task card, with a check animation
+- Calendar export (`/calendar.ics`): unfinished tasks as all-day events with a reminder at 09:00 the day before — works with Google Calendar, Apple Calendar and Outlook
+- Data export (`/export.json`): a full copy of your tasks
+- "Today" follows the student's browser timezone, so deadlines flip at local midnight even though Vercel servers run in UTC
+- Light and dark themes (system default plus a manual toggle), token-based design system in `static/design-system.css`
+- Motion: smooth page transitions, staggered card entrances, animated progress bars and counters; all disabled under `prefers-reduced-motion`
+- Installable as a home-screen app (web app manifest)
 - Defense in depth: owner filters plus database RLS, CSRF checks, secure production cookies, private response caching, and a restrictive script policy
 
 ## Tech stack
@@ -81,11 +88,12 @@ Copy `.env.example` to a private `.env` for local cloud configuration. Never com
 - `STUDYFLOW_DEBUG=1`: opt in to the local debugger and reloader. Disabled by default.
 - `STUDYFLOW_MODE=cloud`: enable Supabase authentication and cloud storage.
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`: Supabase project connection (never a service-role key).
+- `STUDYFLOW_TIMEZONE`: optional fallback timezone such as `Asia/Almaty`, used before the browser has reported its own.
 - `STUDYFLOW_ALLOWED_HOSTS`: exact production hostnames; Vercel deployment hostnames are added automatically.
 
 ## Future improvements
 
-- Task reminders and calendar export
+- Push reminders while the app is closed (a calendar subscription URL instead of a one-off download)
 - Account export/deletion, CAPTCHA integration, and operational monitoring
 
 ## Author

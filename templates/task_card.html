@@ -1,11 +1,17 @@
 {% macro task_card(task, page, filters, today) %}
-<article class="work-task {{ 'is-done' if task.status == 'Done' }}">
+<article class="work-task priority-{{ task.priority|lower }} {{ 'is-done' if task.status == 'Done' }}">
   <div class="work-task-content">
     <div class="work-task-heading"><h3>{{ task.title }}</h3><span class="priority {{ task.priority|lower }}">{{ t(task.priority) }}</span></div>
     <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if task.status != 'Done' and task.due_date < today }}">{% if task.status != 'Done' and task.due_date < today %}{{ t("Overdue") }} · {% else %}{{ t("Due") }} {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span></div>
     {% if task.notes %}<details class="task-notes"><summary>{{ t("Notes") }}</summary><p>{{ task.notes }}</p></details>{% endif %}
   </div>
   <div class="work-task-actions">
+    <form class="quick-done-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
+      {% set done = task.status == 'Done' %}
+      <input type="hidden" name="status" value="{{ 'To do' if done else 'Done' }}">
+      <button class="quick-done {{ 'is-checked' if done }}" type="submit" aria-pressed="{{ 'true' if done else 'false' }}" aria-label="{{ t('Reopen {title}', title=task.title) if done else t('Mark {title} as done', title=task.title) }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>{{ t('Reopen') if done else t('Mark done') }}</span></button>
+    </form>
     <form class="task-status-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
       <label class="sr-only" for="status-{{ task.id }}">{{ t('Status for {title}', title=task.title) }}</label>

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 import secrets
 import sqlite3
 from contextlib import closing
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, g, has_request_context, redirect, render_template, request, session, url_for
 from i18n import t, task_count
 from dotenv import load_dotenv
 from cloud import cloud_tasks, register_auth, valid_config
@@ -22,6 +25,8 @@ CLOUD_MODE = ON_VERCEL or os.environ.get("STUDYFLOW_MODE", "local") == "cloud"
 SECRET_KEY = os.environ.get("STUDYFLOW_SECRET_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+# Vercel servers run in UTC; without a browser timezone this decides what "today" means.
+DEFAULT_TIMEZONE = os.environ.get("STUDYFLOW_TIMEZONE", "")
 allowed_hosts = [host.strip() for host in os.environ.get("STUDYFLOW_ALLOWED_HOSTS", "").split(",") if host.strip()]
 allowed_hosts += [os.environ[key] for key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL") if os.environ.get(key)]
 
@@ -95,11 +100,24 @@ def return_to_workspace():
     page = request.form.get("next", "dashboard")
     if page in {"planner", "progress"}:
         return redirect(url_for(page))
-    return redirect(url_for("index", **workspace_filters()))
+    return redirect(url_for("index", **workspace_filters(), _anchor="task-workspace"))
 
 
 def workspace_filters():
     return {key: request.args[key] for key in ("status", "q", "view", "course", "day") if key in request.args}
+
+
+def user_today() -> date:
+    """Today's date in the student's timezone (browser cookie, then STUDYFLOW_TIMEZONE, then server)."""
+    candidates = [unquote(request.cookies.get("studyflow_tz", ""))] if has_request_context() else []
+    for name in [*candidates, DEFAULT_TIMEZONE]:
+        if not name or len(name) > 64 or not re.fullmatch(r"[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+)*", name):
+            continue
+        try:
+            return datetime.now(ZoneInfo(name)).date()
+        except (ZoneInfoNotFoundError, ValueError):
+            continue
+    return date.today()
 
 
 def urgency_key(task):
@@ -168,7 +186,7 @@ def all_tasks():
 
 
 def task_metrics(tasks: list[sqlite3.Row]) -> dict[str, int]:
-    today = date.today().isoformat()
+    today = user_today().isoformat()
     total = len(tasks)
     completed = sum(task["status"] == "Done" for task in tasks)
     in_progress = sum(task["status"] == "In progress" for task in tasks)
@@ -188,13 +206,14 @@ def task_metrics(tasks: list[sqlite3.Row]) -> dict[str, int]:
 
 def course_progress(tasks: list[sqlite3.Row]) -> list[dict[str, int | str]]:
     courses: dict[str, dict[str, int | str]] = {}
+    today = user_today().isoformat()
     for task in tasks:
         course = task["course"]
         if course not in courses:
             courses[course] = {"name": course, "total": 0, "done": 0, "overdue": 0}
         courses[course]["total"] += 1
         courses[course]["done"] += task["status"] == "Done"
-        courses[course]["overdue"] += task["status"] != "Done" and task["due_date"] < date.today().isoformat()
+        courses[course]["overdue"] += task["status"] != "Done" and task["due_date"] < today
     summary = []
     for course in courses.values():
         course["percent"] = round((course["done"] / course["total"]) * 100) if course["total"] else 0
@@ -208,7 +227,7 @@ def index():
     if status not in {"All", "To do", "In progress", "Done"}:
         status = "All"
     search = request.args.get("q", "").strip()
-    today = date.today()
+    today = user_today()
     all_items = sorted(all_tasks(), key=urgency_key)
     view = request.args.get("view", "all" if status != "All" else "active")
     if view not in {"active", "today", "week", "overdue", "done", "all"}:
@@ -261,6 +280,60 @@ def progress():
     tasks = sorted(all_tasks(), key=lambda task: task["due_date"])
     metrics = task_metrics(tasks)
     return render_template("progress.html", metrics=metrics, courses=course_progress(tasks), page="progress")
+
+
+def ical_text(value: str) -> str:
+    value = value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
+    return value.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
+
+
+def ical_fold(line: str) -> str:
+    # RFC 5545: lines longer than 75 octets continue on the next line after a space.
+    parts, current = [], b""
+    for char in line:
+        encoded = char.encode("utf-8")
+        if len(current) + len(encoded) > (75 if not parts else 74):
+            parts.append(current.decode("utf-8"))
+            current = b""
+        current += encoded
+    parts.append(current.decode("utf-8"))
+    return "\r\n ".join(parts)
+
+
+def download(body: str, mimetype: str, filename: str) -> Response:
+    response = Response(body, mimetype=mimetype)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@app.get("/calendar.ics")
+def calendar_export():
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//StudyFlow//Deadlines//EN", "CALSCALE:GREGORIAN",
+             "X-WR-CALNAME:StudyFlow"]
+    for task in sorted(all_tasks(), key=lambda item: (item["due_date"], item["id"])):
+        if task["status"] == "Done":
+            continue
+        start = date.fromisoformat(str(task["due_date"]))
+        lines += ["BEGIN:VEVENT", f"UID:studyflow-task-{task['id']}@studyflow", f"DTSTAMP:{stamp}",
+                  f"DTSTART;VALUE=DATE:{start:%Y%m%d}", f"DTEND;VALUE=DATE:{start + timedelta(days=1):%Y%m%d}",
+                  "SUMMARY:" + ical_text(f"{task['title']} · {task['course']}"),
+                  "DESCRIPTION:" + ical_text(task["notes"] or ""), "PRIORITY:" + {"High": "1", "Medium": "5", "Low": "9"}.get(task["priority"], "5"),
+                  # Reminder at 09:00 the day before an all-day deadline.
+                  "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + ical_text(task["title"]), "TRIGGER:-PT15H", "END:VALARM",
+                  "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    return download("\r\n".join(ical_fold(line) for line in lines) + "\r\n", "text/calendar", "studyflow.ics")
+
+
+@app.get("/export.json")
+def data_export():
+    fields = ("id", "title", "course", "due_date", "priority", "status", "notes", "created_at")
+    tasks = [{key: (str(task[key]) if key in ("due_date", "created_at") else task[key]) for key in fields}
+             for task in sorted(all_tasks(), key=lambda item: item["id"])]
+    body = json.dumps({"app": "StudyFlow", "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tasks": tasks},
+                      ensure_ascii=False, indent=2)
+    return download(body, "application/json", "studyflow-export.json")
 
 
 def validated_task():

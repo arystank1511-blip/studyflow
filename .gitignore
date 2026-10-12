@@ -12,3 +12,4 @@ instance/
 .vercel/
 public/
 *.sqlite*
+.claude/

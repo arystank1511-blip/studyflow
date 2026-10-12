@@ -1,0 +1,11 @@
+{
+  "name": "StudyFlow",
+  "short_name": "StudyFlow",
+  "description": "Student deadlines, courses and progress in one place.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08110d",
+  "theme_color": "#0b1515",
+  "icons": [{ "src": "/static/brand-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
