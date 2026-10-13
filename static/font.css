@@ -1,3 +1,6 @@
 body, button, input, select, textarea {
-  font-family: "Golos Text", sans-serif;
+  font-family: "Onest", system-ui, sans-serif;
+}
+h1, .brand-wordmark, .completion-overview strong {
+  font-family: "Unbounded", "Onest", sans-serif;
 }

@@ -266,7 +266,8 @@ class StudyFlowTests(unittest.TestCase):
         for path in ("/", "/planner"):
             page = self.client.get(path).get_data(as_text=True)
             nav = page.split('<nav class="side-nav">')[1].split('</nav>')[0]
-            self.assertEqual(nav.count('<a '), 2)
+            self.assertEqual(nav.count('<a '), 3)
+            self.assertIn('href="/focus"', nav)
             self.assertNotIn('href="/planner"', nav)
             self.assertIn('id="task-workspace"', page)
             self.assertIn('class="day-add-task"', page)
@@ -362,6 +363,50 @@ class StudyFlowTests(unittest.TestCase):
         self.assertIn("TRIGGER:-PT15H", body)
         self.assertNotIn("Finished lab", body)
         self.assertTrue(all(len(line.encode()) <= 75 for line in body.split("\r\n")))
+
+    def test_quick_add_creates_parsed_task_and_previews(self):
+        import json
+        preview = self.client.get("/tasks/quick/preview", query_string={"text": "Эссе завтра 18:00 !высокий #философия"})
+        data = json.loads(preview.get_data(as_text=True))
+        self.assertEqual((data["title"], data["course"], data["priority_key"], data["time"]), ("Эссе", "философия", "High", "18:00"))
+        self.assertTrue(data["valid"])
+        response = self.post("/tasks/quick", text="Эссе завтра 18:00 !высокий #философия")
+        self.assertIn("view=all", response.location)
+        task = self.tasks()[0]
+        self.assertEqual((task["title"], task["course"], task["priority"], task["notes"]), ("Эссе", "философия", "High", "18:00"))
+        self.assertEqual(task["due_date"], (date.today() + timedelta(days=1)).isoformat())
+        self.post("/tasks/quick", text="  #only-course !high ")
+        self.assertEqual(len(self.tasks()), 1)
+        self.assertEqual(self.client.post("/tasks/quick", data={"text": "No token"}).status_code, 400)
+
+    def test_reschedule_overdue_moves_only_unfinished_past_tasks(self):
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        self.create(title="Late", due_date=yesterday)
+        self.create(title="Late but done", due_date=yesterday)
+        self.create(title="Future", due_date=(date.today() + timedelta(days=3)).isoformat())
+        done = next(task for task in self.tasks() if task["title"] == "Late but done")
+        self.post(f"/tasks/{done['id']}/status", status="Done")
+        page = self.client.get("/").data
+        self.assertIn(b'action="/tasks/reschedule-overdue"', page)
+        self.post("/tasks/reschedule-overdue")
+        dates = {task["title"]: task["due_date"] for task in self.tasks()}
+        self.assertEqual(dates["Late"], date.today().isoformat())
+        self.assertEqual(dates["Late but done"], yesterday)
+        self.assertNotIn(b'action="/tasks/reschedule-overdue"', self.client.get("/").data)
+
+    def test_focus_page_and_course_colours(self):
+        from app import COURSE_COLORS, course_color
+        self.assertIn(b"Nothing to focus on", self.client.get("/focus").data)
+        self.create(title="First", priority="Low")
+        self.create(title="Second", priority="High")
+        ids = {task["title"]: task["id"] for task in self.tasks()}
+        page = self.client.get("/focus").data
+        self.assertIn(b'<h2 id="focus-task">Second</h2>', page)
+        self.assertIn(f'<h2 id="focus-task">First</h2>'.encode(), self.client.get(f"/focus?task={ids['First']}").data)
+        self.assertEqual(self.post(f"/tasks/{ids['First']}/status", status="Done", next="focus").location, "/focus")
+        self.assertIn(course_color("Physics"), COURSE_COLORS)
+        self.assertEqual(course_color("Physics"), course_color(" physics "))
+        self.assertIn(f"--course: {course_color('Computer Science')}".encode(), self.client.get("/").data)
 
     def test_json_export_contains_all_tasks(self):
         import json

@@ -2,7 +2,35 @@
 {% from 'task_card.html' import task_card with context %}
 {% block title %}{{ t('Tasks & plan') }} · StudyFlow{% endblock %}
 {% block dashboard_content %}
-<header class="page-intro"><div><p class="eyebrow">STUDYFLOW</p><h1>{{ t('Tasks & plan') }}</h1><p>{{ t('Choose a day, plan your work, and update tasks in one place.') }}</p></div><span class="page-date"><time datetime="{{ today }}">{{ today }}</time></span></header>
+<header class="today-hero">
+  <div class="today-hero-copy">
+    <p class="eyebrow"><time datetime="{{ today }}" data-format="long">{{ today }}</time></p>
+    <h1>{{ t(greeting) }}</h1>
+    <p>{% if today_total %}{{ t('{done} of {total} done today', done=today_done, total=today_total) }}{% else %}{{ t('Nothing is due today. Plan ahead or take a breath.') }}{% endif %}{% if counts.overdue %} · <a class="overdue-link" href="{{ url_for('index', view='overdue', _anchor='task-workspace') }}">{{ t('{n} overdue', n=counts.overdue) }}</a>{% endif %}</p>
+  </div>
+  {% set ratio = (today_done / today_total) if today_total else 0 %}
+  <div class="today-ring" role="img" aria-label="{{ t('{done} of {total} done today', done=today_done, total=today_total) }}" style="--ratio: {{ ratio }}">
+    <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle class="ring-value" cx="60" cy="60" r="52" pathLength="100"/></svg>
+    <strong>{{ (ratio * 100)|round|int }}<span>%</span></strong>
+  </div>
+</header>
+<form class="quick-add" id="quick-add" method="post" action="{{ url_for('quick_add') }}" autocomplete="off" data-quick-add data-preview-url="{{ url_for('quick_add_preview') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="quick-add-field">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+    <span class="sr-only">{{ t('Quick add') }}</span>
+    <input name="text" maxlength="300" required placeholder="{{ t('Essay fri 18:00 !high #philosophy') }}" aria-describedby="quick-add-help">
+    <kbd aria-hidden="true">/</kbd>
+    <button class="primary" type="submit">{{ t('Add') }}</button>
+  </label>
+  <p class="quick-add-preview" id="quick-add-help" aria-live="polite" data-quick-preview>{{ t('Type a task in one line: a date (tomorrow, fri, 25.10), #course and !high are recognised.') }}</p>
+</form>
+{% if counts.overdue %}
+<div class="overdue-banner" role="status">
+  <span><strong>{{ t('{n} overdue', n=counts.overdue) }}</strong> — {{ t('move them to today and start fresh.') }}</span>
+  <form method="post" action="{{ url_for('reschedule_overdue') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">{{ t('Move to today') }}</button></form>
+</div>
+{% endif %}
 <section class="week-panel unified-week" aria-label="{{ t('Next seven days') }}">
   <div class="week-panel-heading"><h2>{{ t('Next 7 days') }}</h2><a class="edit-link" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('All dates') }}</a></div>
   <div class="week-grid">{% for item in week %}

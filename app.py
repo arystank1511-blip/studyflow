@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+import zlib
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -12,7 +13,8 @@ from urllib.parse import unquote, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, Response, abort, flash, g, has_request_context, redirect, render_template, request, session, url_for
-from i18n import t, task_count
+from i18n import current_language, t, task_count
+from quick_add import parse as parse_quick_add
 from dotenv import load_dotenv
 from cloud import cloud_tasks, register_auth, valid_config
 from werkzeug.exceptions import SecurityError
@@ -70,7 +72,7 @@ def form_context():
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(32)
     return {
-        "t": t, "task_count": task_count, "lang": g.get("language", "en"),
+        "t": t, "task_count": task_count, "lang": g.get("language", "en"), "course_color": course_color,
         "csrf_token": session["csrf_token"],
         "task_form": session.pop("task_draft", {}),
         "task_errors": session.pop("task_errors", {}),
@@ -100,7 +102,7 @@ def change_language():
 
 def return_to_workspace():
     page = request.form.get("next", "dashboard")
-    if page in {"planner", "progress"}:
+    if page in {"planner", "progress", "focus"}:
         return redirect(url_for(page))
     return redirect(url_for("index", **workspace_filters(), _anchor="task-workspace"))
 
@@ -109,17 +111,40 @@ def workspace_filters():
     return {key: request.args[key] for key in ("status", "q", "view", "course", "day") if key in request.args}
 
 
-def user_today() -> date:
-    """Today's date in the student's timezone (browser cookie, then STUDYFLOW_TIMEZONE, then server)."""
+def user_now() -> datetime:
+    """Now in the student's timezone (browser cookie, then STUDYFLOW_TIMEZONE, then server)."""
     candidates = [unquote(request.cookies.get("studyflow_tz", ""))] if has_request_context() else []
     for name in [*candidates, DEFAULT_TIMEZONE]:
         if not name or len(name) > 64 or not re.fullmatch(r"[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+)*", name):
             continue
         try:
-            return datetime.now(ZoneInfo(name)).date()
+            return datetime.now(ZoneInfo(name))
         except (ZoneInfoNotFoundError, ValueError):
             continue
-    return date.today()
+    return datetime.now()
+
+
+def user_today() -> date:
+    return user_now().date()
+
+
+def greeting() -> str:
+    hour = user_now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 18:
+        return "Good afternoon"
+    if 18 <= hour < 23:
+        return "Good evening"
+    return "Good night"
+
+
+COURSE_COLORS = ("#2E5BFF", "#D97706", "#12A06B", "#E5484D", "#7C5CFF", "#0B7F8C", "#D6408B", "#64748B")
+
+
+def course_color(name: str) -> str:
+    """A stable colour per course name, so the same subject always looks the same."""
+    return COURSE_COLORS[zlib.crc32(name.strip().casefold().encode("utf-8")) % len(COURSE_COLORS)]
 
 
 def urgency_key(task):
@@ -268,7 +293,9 @@ def index():
                            today=today.isoformat(), page="dashboard", view=view, course=course, day=day,
                            courses=sorted({task["course"] for task in all_items}), counts=counts,
                            next_task=next_task, next_label=deadline_label(next_task, today) if next_task else "",
-                           week=weekly_load(all_items, today), filters=workspace_filters(), filter_counts=filter_counts)
+                           week=weekly_load(all_items, today), filters=workspace_filters(), filter_counts=filter_counts,
+                           greeting=greeting(), today_total=sum(task["due_date"] == today.isoformat() for task in all_items),
+                           today_done=sum(task["due_date"] == today.isoformat() and task["status"] == "Done" for task in all_items))
 
 
 @app.route("/planner")
@@ -361,12 +388,7 @@ def validated_task():
     return {"title": title[:100], "course": course[:80], "due_date": due_date[:10], "notes": notes[:300], "priority": priority}, errors
 
 
-@app.post("/tasks")
-def create_task():
-    values, errors = validated_task()
-    if errors:
-        session["task_draft"], session["task_errors"] = values, errors
-        return return_to_workspace()
+def insert_task(values):
     if app.config["CLOUD_MODE"]:
         cloud_tasks("POST", data=values)
     else:
@@ -375,6 +397,69 @@ def create_task():
             (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], datetime.now().isoformat(timespec="seconds")),
         )
         get_db().commit()
+
+
+def quick_values(text):
+    parsed = parse_quick_add(text, user_today(), "Общее" if current_language() == "ru" else "General")
+    errors = {}
+    if not parsed["title"] or len(parsed["title"]) > 100:
+        errors["title"] = "Enter a task title between 1 and 100 characters."
+    if len(parsed["course"]) > 80:
+        errors["course"] = "Enter a course between 1 and 80 characters."
+    values = {key: parsed[key] for key in ("title", "course", "due_date", "priority", "notes")}
+    return values, parsed["found"], errors
+
+
+@app.get("/tasks/quick/preview")
+def quick_add_preview():
+    values, found, errors = quick_values(request.args.get("text", "")[:300])
+    priorities = {"High": t("High"), "Medium": t("Medium"), "Low": t("Low")}
+    return {"title": values["title"], "course": values["course"], "course_color": course_color(values["course"]),
+            "due_date": values["due_date"], "priority": priorities[values["priority"]], "priority_key": values["priority"],
+            "time": found.get("time", ""), "found": sorted(found), "valid": not errors}
+
+
+@app.post("/tasks/quick")
+def quick_add():
+    values, _, errors = quick_values(request.form.get("text", ""))
+    if errors:
+        flash(next(iter(errors.values())), "error")
+        return redirect(url_for("index", _anchor="quick-add"))
+    insert_task(values)
+    flash("Task added successfully.", "success")
+    return redirect(url_for("index", view="all", day=values["due_date"], _anchor="task-workspace"))
+
+
+@app.post("/tasks/reschedule-overdue")
+def reschedule_overdue():
+    today = user_today().isoformat()
+    overdue = [task for task in all_tasks() if task["status"] != "Done" and task["due_date"] < today]
+    for task in overdue:
+        if app.config["CLOUD_MODE"]:
+            cloud_tasks("PATCH", task["id"], {"due_date": today})
+        else:
+            get_db().execute("UPDATE tasks SET due_date = ? WHERE id = ?", (today, task["id"]))
+    if not app.config["CLOUD_MODE"]:
+        get_db().commit()
+    flash(t("Moved {n} to today.", n=task_count(len(overdue))) if overdue else "Nothing is overdue.", "success")
+    return redirect(url_for("index", _anchor="task-workspace"))
+
+
+@app.get("/focus")
+def focus():
+    active = sorted((task for task in all_tasks() if task["status"] != "Done"), key=urgency_key)
+    selected = request.args.get("task", type=int)
+    current = next((task for task in active if task["id"] == selected), active[0] if active else None)
+    return render_template("focus.html", page="focus", tasks=active, current=current, filters={})
+
+
+@app.post("/tasks")
+def create_task():
+    values, errors = validated_task()
+    if errors:
+        session["task_draft"], session["task_errors"] = values, errors
+        return return_to_workspace()
+    insert_task(values)
     flash("Task added successfully.", "success")
     if request.form.get("workspace") == "unified":
         return redirect(url_for("index", view="all", day=values["due_date"], _anchor="task-workspace"))

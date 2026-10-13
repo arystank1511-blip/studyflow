@@ -56,9 +56,9 @@ class CloudSecurityTests(unittest.TestCase):
 
     def test_anonymous_cannot_read_or_write(self):
         with patch("cloud.api") as remote:
-            for path in ("/", "/planner", "/progress", "/tasks/1/edit"):
+            for path in ("/", "/planner", "/progress", "/focus", "/tasks/quick/preview", "/calendar.ics", "/export.json", "/tasks/1/edit"):
                 self.assertEqual(self.client.get(path).location, "/login")
-            for path in ("/tasks", "/tasks/1/delete", "/tasks/1/status", "/tasks/1/edit"):
+            for path in ("/tasks", "/tasks/quick", "/tasks/reschedule-overdue", "/tasks/1/delete", "/tasks/1/status", "/tasks/1/edit"):
                 self.client.get("/login")
                 with self.client.session_transaction() as state:
                     self.csrf = state["csrf_token"]
@@ -67,7 +67,7 @@ class CloudSecurityTests(unittest.TestCase):
 
     def test_all_post_forms_require_csrf(self):
         for path in ("/login", "/register", "/login/code", "/login/verify", "/password/forgot", "/password/reset", "/logout",
-                     "/language", "/tasks", "/tasks/1/edit", "/tasks/1/status", "/tasks/1/delete"):
+                     "/language", "/tasks", "/tasks/quick", "/tasks/reschedule-overdue", "/tasks/1/edit", "/tasks/1/status", "/tasks/1/delete"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.post(path).status_code, 400)
                 self.assertEqual(self.client.post(path, data={"csrf_token": "подделка"}).status_code, 400)

@@ -29,6 +29,11 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Localized dates, task statuses, validation messages, and deletion confirmation; user-entered task text stays unchanged
 - Keyboard-accessible task dialog, inline validation, and protected POST forms
 - Cloud mode: Supabase PostgreSQL, verified email accounts (password, email code or Google), password reset, account-owned tasks, and logout
+- **Today** screen: greeting, today's progress ring, overdue count and a one-click "Move to today" for overdue work
+- **Quick add** in one line: `Эссе пт 18:00 !высокий #философия` → date, priority, course and time are recognised (RU/EN); a live preview shows what will be saved. Press `/` to jump there, `n` for the full form
+- **Focus timer** (`/focus`): 25/5, 50/10 or 15/3 blocks for a chosen task, ring countdown, notifications, sessions and minutes per day, finish the task in place
+- Each course gets a stable colour across cards, filters and progress
+- StudyFlow 2.0 brand: signal blue + amber, Onest and Unbounded typefaces, new mark
 - One-click **Done / Reopen** button on every task card, with a check animation
 - Calendar export (`/calendar.ics`): unfinished tasks as all-day events with a reminder at 09:00 the day before — works with Google Calendar, Apple Calendar and Outlook
 - Data export (`/export.json`): a full copy of your tasks
