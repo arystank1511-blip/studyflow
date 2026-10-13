@@ -94,7 +94,7 @@ def load_identity():
             abort(403)
         return
     public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
-              "google_login", "auth_callback", "change_language", "health"}
+              "google_login", "auth_callback", "change_language", "health", "service_worker"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:

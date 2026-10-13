@@ -56,6 +56,24 @@
     if (event.key === 'n') { const opener = document.querySelector('[data-open-modal]'); if (opener) { event.preventDefault(); opener.click(); } }
   });
 
+  // Installable app with an offline notice.
+  if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') {
+    navigator.serviceWorker?.register('/sw.js').catch(() => {});
+  }
+
+  // One open task menu at a time; Escape or a tap outside closes it.
+  const menus = document.querySelectorAll('.task-more');
+  menus.forEach(menu => menu.addEventListener('toggle', () => {
+    if (menu.open) menus.forEach(other => { if (other !== menu) other.open = false; });
+  }));
+  document.addEventListener('click', event => {
+    menus.forEach(menu => { if (menu.open && !menu.contains(event.target)) menu.open = false; });
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    menus.forEach(menu => { if (menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+  });
+
   // Focus timer.
   const board = document.querySelector('[data-focus]');
   if (!board || !board.querySelector('[data-focus-ring]')) return;

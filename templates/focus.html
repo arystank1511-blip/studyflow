@@ -1,7 +1,7 @@
 {% extends 'layout.html' %}
 {% block title %}{{ t('Focus') }} · StudyFlow{% endblock %}
 {% block dashboard_content %}
-<header class="page-intro"><div><p class="eyebrow">{{ t('FOCUS') }}</p><h1>{{ t('One task. No distractions.') }}</h1><p>{{ t('Work in focused blocks with short breaks. Finish the task right from here.') }}</p></div></header>
+<header class="page-intro"><div><h1>{{ t('One task. No distractions.') }}</h1><p>{{ t('Work in focused blocks with short breaks. Finish the task right from here.') }}</p></div></header>
 <section class="focus-board workspace-board" data-focus aria-labelledby="focus-task">
   {% if current %}
   <form class="focus-picker" method="get" action="{{ url_for('focus') }}">

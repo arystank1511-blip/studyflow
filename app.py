@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import Flask, Response, abort, flash, g, has_request_context, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, send_from_directory, flash, g, has_request_context, redirect, render_template, request, session, url_for
 from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
 from dotenv import load_dotenv
@@ -335,6 +335,13 @@ def download(body: str, mimetype: str, filename: str) -> Response:
     return response
 
 
+@app.get("/sw.js")
+def service_worker():
+    # Served from the root so it may control every page; it caches only public static files.
+    # The shared no-store header makes browsers pick up a new worker on every visit.
+    return send_from_directory(BASE_DIR / "static", "sw.js", mimetype="application/javascript", max_age=0)
+
+
 @app.get("/calendar.ics")
 def calendar_export():
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -506,6 +513,20 @@ def update_status(task_id: int):
             abort(404)
         db.commit()
     flash("Task status updated.", "success")
+    return return_to_workspace()
+
+
+@app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/snooze")
+def snooze_task(task_id: int):
+    tomorrow = (user_today() + timedelta(days=1)).isoformat()
+    if app.config["CLOUD_MODE"]:
+        cloud_tasks("PATCH", task_id, {"due_date": tomorrow})
+    else:
+        db = get_db()
+        if not db.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (tomorrow, task_id)).rowcount:
+            abort(404)
+        db.commit()
+    flash("Moved to tomorrow.", "success")
     return return_to_workspace()
 
 

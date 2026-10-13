@@ -408,6 +408,24 @@ class StudyFlowTests(unittest.TestCase):
         self.assertEqual(course_color("Physics"), course_color(" physics "))
         self.assertIn(f"--course: {course_color('Computer Science')}".encode(), self.client.get("/").data)
 
+    def test_snooze_moves_task_to_tomorrow_and_menu_offers_it(self):
+        self.create(title="Snooze me", due_date=(date.today() - timedelta(days=2)).isoformat())
+        task_id = self.tasks()[0]["id"]
+        page = self.client.get("/").data
+        self.assertIn(f'action="/tasks/{task_id}/snooze'.encode(), page)
+        self.assertIn(b'class="task-more"', page)
+        self.post(f"/tasks/{task_id}/snooze")
+        self.assertEqual(self.tasks()[0]["due_date"], (date.today() + timedelta(days=1)).isoformat())
+        self.assertEqual(self.post("/tasks/999/snooze").status_code, 404)
+
+    def test_service_worker_is_served_from_root_without_caching_pages(self):
+        response = self.client.get("/sw.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/javascript")
+        self.assertIn("no-store", response.headers["Cache-Control"])  # Browsers always fetch the newest worker.
+        self.assertIn("/static/offline.html", response.get_data(as_text=True))
+        response.close()
+
     def test_json_export_contains_all_tasks(self):
         import json
         self.create(title="Отчёт по физике")

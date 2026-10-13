@@ -30,7 +30,6 @@
     </div>
   </div>
   <section class="auth-card" aria-labelledby="auth-title">
-    <p class="eyebrow">{{ t('YOUR PERSONAL STUDY SPACE') }}</p>
     <h1 id="auth-title">{{ t({'login': 'Welcome back.', 'register': 'Create your study space.', 'code': 'Sign in without a password.', 'verify': 'Check your email', 'forgot': 'Forgot your password?', 'reset': 'Choose a new password'}[mode]) }}</h1>
     {% if not ready %}
       <p>{{ t('Cloud sign-in is not connected yet. Your existing tasks remain on this computer.') }}</p>

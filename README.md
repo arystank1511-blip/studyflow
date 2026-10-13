@@ -33,12 +33,14 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - **Quick add** in one line: `Эссе пт 18:00 !высокий #философия` → date, priority, course and time are recognised (RU/EN); a live preview shows what will be saved. Press `/` to jump there, `n` for the full form
 - **Focus timer** (`/focus`): 25/5, 50/10 or 15/3 blocks for a chosen task, ring countdown, notifications, sessions and minutes per day, finish the task in place
 - Each course gets a stable colour across cards, filters and progress
-- StudyFlow 2.0 brand: signal blue + amber, Onest and Unbounded typefaces, new mark
+- "Notebook" design: squared paper, a red margin line with the tick box in it, blue-pen actions, the teacher's red pen only for overdue work, a highlighter for today; dark theme is a chalkboard. One stylesheet: `static/notebook.css`
+- Calm task rows: tick, title, course and date; status, focus, "Move to tomorrow", edit and delete live in the ⋯ menu. Filters fold away
+- Installable app with an offline page (`/sw.js`); private pages are never cached
 - One-click **Done / Reopen** button on every task card, with a check animation
 - Calendar export (`/calendar.ics`): unfinished tasks as all-day events with a reminder at 09:00 the day before — works with Google Calendar, Apple Calendar and Outlook
 - Data export (`/export.json`): a full copy of your tasks
 - "Today" follows the student's browser timezone, so deadlines flip at local midnight even though Vercel servers run in UTC
-- Light and dark themes (system default plus a manual toggle), token-based design system in `static/design-system.css`
+- Light and dark themes (system default plus a manual toggle)
 - Motion: smooth page transitions, staggered card entrances, animated progress bars and counters; all disabled under `prefers-reduced-motion`
 - Installable as a home-screen app (web app manifest)
 - Defense in depth: owner filters plus database RLS, CSRF checks, secure production cookies, private response caching, and a restrictive script policy
