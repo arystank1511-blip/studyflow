@@ -1,0 +1,58 @@
+{% extends 'layout.html' %}
+{% block title %}{{ t('Study') }} · StudyFlow{% endblock %}
+{% macro clock(minutes) %}{{ '%d:%02d'|format(minutes // 60, minutes % 60) }}{% endmacro %}
+{% block dashboard_content %}
+<section class="study-hero" aria-labelledby="study-total-label" data-study data-save-url="{{ url_for('save_study_session') }}">
+  <p class="hand-date" id="study-total-label">{{ t('Studied today') }}</p>
+  <p class="study-total" role="timer" aria-live="off"><span data-study-total data-base="{{ today_total * 60 }}">{{ clock(today_total) }}:00</span></p>
+  <p class="study-meta">
+    {% if streak %}<span class="study-streak">{{ t('{n} days in a row', n=streak) }}</span>{% endif %}
+    <span data-study-running hidden></span>
+  </p>
+  {% if ddays %}
+  <ul class="ddays" aria-label="{{ t('Upcoming exams') }}">
+    {% for item in ddays %}<li style="--course: {{ course_color(item.course) }}"><strong>{{ 'D-day' if item.days == 0 else 'D-' ~ item.days }}</strong><span>{{ item.title }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+{% if not storage_ready %}
+<p class="flash error" role="status">{{ t('Study time cannot be saved yet: the site owner needs to run supabase/study_sessions.sql in Supabase.') }}</p>
+{% endif %}
+
+<section class="page study-subjects" aria-labelledby="subjects-title">
+  <div class="workspace-head"><h2 id="subjects-title">{{ t('What are you studying?') }}</h2><a class="text-button" href="{{ url_for('focus') }}">{{ t('Pomodoro') }}</a></div>
+  <ul class="subject-list">
+    {% for name in subjects %}
+    <li class="subject" style="--course: {{ course_color(name) }}" data-subject="{{ name }}">
+      <button class="subject-toggle" type="button" data-subject-toggle aria-pressed="false" aria-label="{{ t('Start or stop studying {course}', course=name) }}" {% if not storage_ready %}disabled{% endif %}>
+        <svg class="icon-play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+        <svg class="icon-stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+      <span class="subject-name">{{ name }}</span>
+      <span class="subject-time" data-subject-time data-base="{{ today_courses.get(name, 0) * 60 }}">{{ clock(today_courses.get(name, 0)) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="study-note">{{ t('Tap ▶ next to a subject to start the stopwatch, tap again to stop. Sessions under a minute are not saved. The screen stays on while it runs.') }}</p>
+</section>
+
+<section class="page study-record" aria-labelledby="record-title">
+  <h2 id="record-title">{{ t('Last 12 weeks') }}</h2>
+  <div class="heatmap" role="img" aria-label="{{ t('Study time per day for the last 12 weeks; darker means more time.') }}">
+    {% for column in heatmap %}<div class="heat-col">{% for cell in column %}<span class="heat level-{{ cell.level }} {{ 'is-future' if cell.future }} {{ 'is-today' if cell.date == today }}" title="{{ cell.date }}: {{ clock(cell.minutes) }}"></span>{% endfor %}</div>{% endfor %}
+  </div>
+  <p class="heat-legend"><span>{{ t('Less') }}</span>{% for level in range(5) %}<span class="heat level-{{ level }}"></span>{% endfor %}<span>{{ t('More') }}</span></p>
+
+  <h2 class="week-title">{{ t('This week by subject') }} <span>{{ clock(week_total) }}</span></h2>
+  {% if week_courses %}
+  <ul class="week-bars">
+    {% for name, minutes in week_courses %}<li style="--course: {{ course_color(name) }}; --share: {{ (minutes / week_courses[0][1] * 100)|round(1) }}%"><span class="bar-label">{{ name }}</span><span class="bar"><span></span></span><span class="bar-time">{{ clock(minutes) }}</span></li>{% endfor %}
+  </ul>
+  {% else %}
+  <p class="study-note">{{ t('No study time this week yet. Start the stopwatch above.') }}</p>
+  {% endif %}
+</section>
+<form hidden data-study-csrf><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+<script id="study-strings" type="application/json">{{ {'studying': t('Studying: {course}'), 'short': t('Less than a minute — not saved.'), 'failed': t('Could not save the session. Check your connection.')}|tojson }}</script>
+{% endblock %}

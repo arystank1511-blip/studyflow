@@ -15,8 +15,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import Flask, Response, abort, send_from_directory, flash, g, has_request_context, redirect, render_template, request, session, url_for
 from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
+import schedule_scan
 from dotenv import load_dotenv
-from cloud import cloud_tasks, register_auth, valid_config
+from cloud import StudyStorageMissing, cloud_sessions, cloud_tasks, register_auth, valid_config
 from werkzeug.exceptions import SecurityError
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,6 +54,13 @@ app.config.update(
 
 
 LANGUAGES = {"ru", "kk", "en"}
+
+
+@app.before_request
+def allow_photo_upload():
+    # Forms stay capped at 32 KB; only the timetable photo may be larger.
+    if request.endpoint == "schedule_scan_photo":
+        request.max_content_length = schedule_scan.MAX_IMAGE_BYTES + 64 * 1024
 
 
 @app.before_request
@@ -138,7 +146,7 @@ def change_language():
 
 def return_to_workspace():
     page = request.form.get("next", "dashboard")
-    if page in {"planner", "progress", "focus"}:
+    if page in {"planner", "progress", "focus", "study", "schedule"}:
         return redirect(url_for(page))
     return redirect(url_for("index", **workspace_filters(), _anchor="task-workspace"))
 
@@ -239,6 +247,15 @@ def init_db() -> None:
                 notes TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS study_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                course TEXT NOT NULL,
+                minutes INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                started_at TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS study_sessions_day ON study_sessions(day);
             """
         )
         db.commit()
@@ -486,6 +503,175 @@ def reschedule_overdue():
         get_db().commit()
     flash(t("Moved {n} to today.", n=task_count(len(overdue))) if overdue else "Nothing is overdue.", "success")
     return redirect(url_for("index", _anchor="task-workspace"))
+
+
+KIND_LABELS = {"lecture": "Lecture", "practice": "Practice", "lab": "Lab", "seminar": "Seminar", "other": "Class"}
+
+
+@app.get("/schedule")
+def schedule():
+    return render_template("schedule.html", page="schedule", scan_ready=schedule_scan.available(), filters={})
+
+
+@app.post("/schedule/scan")
+def schedule_scan_photo():
+    photo = request.files.get("photo")
+    if not photo:
+        flash("Choose a photo of your timetable.", "error")
+        return redirect(url_for("schedule"))
+    try:
+        result = schedule_scan.scan(photo.read(schedule_scan.MAX_IMAGE_BYTES + 1))
+    except schedule_scan.ScanError as error:
+        flash(str(error), "error")
+        return redirect(url_for("schedule"))
+    if not result["classes"]:
+        flash("No classes were found in this photo. Try a clearer, straight photo of the timetable.", "error")
+        return redirect(url_for("schedule"))
+    return render_template("schedule_review.html", page="schedule", classes=result["classes"], warnings=result["warnings"],
+                           kinds=KIND_LABELS, has_parity=any(row["parity"] != "every" for row in result["classes"]), filters={})
+
+
+def schedule_rows():
+    """Read the reviewed rows back from the form, trusting nothing the browser sent."""
+    try:
+        count = min(int(request.form.get("count", "0")), schedule_scan.MAX_CLASSES)
+    except ValueError:
+        count = 0
+    rows = []
+    for index in range(max(count, 0)):
+        if request.form.get(f"include-{index}") != "1":
+            continue
+        row = schedule_scan.clean({"classes": [{
+            "weekday": int(request.form.get(f"weekday-{index}", "-1")) if request.form.get(f"weekday-{index}", "").isdigit() else -1,
+            "start": request.form.get(f"start-{index}", ""), "end": request.form.get(f"end-{index}", ""),
+            "course": request.form.get(f"course-{index}", ""), "kind": request.form.get(f"kind-{index}", ""),
+            "room": request.form.get(f"room-{index}", ""), "teacher": request.form.get(f"teacher-{index}", ""),
+            "parity": request.form.get(f"parity-{index}", "every"),
+        }]})["classes"]
+        rows.extend(row)
+    return rows
+
+
+@app.post("/schedule/import")
+def schedule_import():
+    rows = schedule_rows()
+    weeks = request.form.get("weeks", "2")
+    weeks = int(weeks) if weeks in {"1", "2", "4", "8"} else 2
+    this_week = request.form.get("this_week", "odd")
+    this_week = this_week if this_week in {"odd", "even"} else "odd"
+    today = user_today()
+    monday = today - timedelta(days=today.weekday())
+    existing = {(task["title"], task["course"], str(task["due_date"])) for task in all_tasks()}
+    added = 0
+    for week in range(weeks):
+        parity = this_week if week % 2 == 0 else ("even" if this_week == "odd" else "odd")
+        for row in rows:
+            if row["parity"] not in ("every", parity):
+                continue
+            day = monday + timedelta(days=7 * week + row["weekday"])
+            if day < today:
+                continue
+            title = (t(KIND_LABELS[row["kind"]]) + (" " + row["start"] if row["start"] else ""))[:100]
+            notes = " · ".join(part for part in (
+                f"{row['start']}–{row['end']}" if row["start"] and row["end"] else row["start"],
+                (t("Room") + " " + row["room"]) if row["room"] else "", row["teacher"]) if part)[:300]
+            key = (title, row["course"], day.isoformat())
+            if key in existing or added >= 300:
+                continue
+            insert_task({"title": title, "course": row["course"], "due_date": day.isoformat(), "priority": "Low", "notes": notes})
+            existing.add(key)
+            added += 1
+    flash(t("Added {n} classes to your plan.", n=added) if added else "Nothing new to add.", "success")
+    return redirect(url_for("index", view="week", _anchor="task-workspace"))
+
+
+EXAM_WORDS = ("экзамен", "емтихан", "exam", "коллоквиум", "сессия", "сессиясы", "midterm", "final", "рубеж", "тест", "test", "quiz", "аралық")
+
+
+def study_sessions_since(day):
+    if app.config["CLOUD_MODE"]:
+        return cloud_sessions(since=day)
+    return [dict(row) for row in get_db().execute(
+        "SELECT course, minutes, day FROM study_sessions WHERE day >= ? ORDER BY day", (day,)).fetchall()]
+
+
+def study_level(minutes):
+    return 0 if minutes <= 0 else 1 if minutes < 30 else 2 if minutes < 60 else 3 if minutes < 120 else 4
+
+
+@app.get("/study")
+def study():
+    today = user_today()
+    start = today - timedelta(days=today.weekday() + 7 * 11)
+    try:
+        sessions = study_sessions_since(start.isoformat())
+        storage_ready = True
+    except StudyStorageMissing:
+        sessions, storage_ready = [], False
+    by_day, today_courses, week_courses = {}, {}, {}
+    week_start = (today - timedelta(days=6)).isoformat()
+    for row in sessions:
+        day, minutes, course = str(row["day"]), int(row["minutes"]), row["course"]
+        by_day[day] = by_day.get(day, 0) + minutes
+        if day == today.isoformat():
+            today_courses[course] = today_courses.get(course, 0) + minutes
+        if day >= week_start:
+            week_courses[course] = week_courses.get(course, 0) + minutes
+    tasks = all_tasks()
+    active = [task for task in tasks if task["status"] != "Done"]
+    names = {task["course"] for task in active} | set(today_courses) | set(week_courses)
+    other = t("Other")
+    subjects = sorted(names, key=lambda name: (-today_courses.get(name, 0), -week_courses.get(name, 0), name.casefold()))[:12]
+    if other not in subjects:
+        subjects.append(other)
+    heatmap = []
+    for week in range(12):
+        column = []
+        for weekday in range(7):
+            day = start + timedelta(days=7 * week + weekday)
+            minutes = by_day.get(day.isoformat(), 0)
+            column.append({"date": day.isoformat(), "minutes": minutes, "level": study_level(minutes), "future": day > today})
+        heatmap.append(column)
+    exams = sorted((task for task in active if str(task["due_date"]) >= today.isoformat()
+                    and any(word in (task["title"] + " " + task["course"]).casefold() for word in EXAM_WORDS)),
+                   key=lambda task: str(task["due_date"]))[:3]
+    ddays = [{"title": task["title"], "course": task["course"],
+              "days": (date.fromisoformat(str(task["due_date"])) - today).days} for task in exams]
+    streak = 0
+    cursor = today if by_day.get(today.isoformat()) else today - timedelta(days=1)
+    while by_day.get(cursor.isoformat()):
+        streak += 1
+        cursor -= timedelta(days=1)
+    week_total = sum(week_courses.values())
+    return render_template("study.html", page="study", filters={}, storage_ready=storage_ready,
+                           today_total=sum(today_courses.values()), today_courses=today_courses, subjects=subjects,
+                           week_courses=sorted(week_courses.items(), key=lambda item: -item[1]), week_total=week_total,
+                           heatmap=heatmap, ddays=ddays, streak=streak, today=today.isoformat())
+
+
+@app.post("/study/sessions")
+def save_study_session():
+    course = " ".join(request.form.get("course", "").split())[:80]
+    try:
+        seconds = int(request.form.get("seconds", "0"))
+    except ValueError:
+        seconds = 0
+    if not course or not 60 <= seconds <= 12 * 3600:
+        return {"saved": 0}, 400 if not course or seconds > 12 * 3600 else 200
+    minutes = round(seconds / 60)
+    started = request.form.get("started_at", "")[:40]
+    started = started if re.fullmatch(r"\d{4}-\d{2}-\d{2}T[\d:.]+Z?", started) else None
+    row = {"course": course, "minutes": minutes, "day": user_today().isoformat(), "started_at": started}
+    try:
+        if app.config["CLOUD_MODE"]:
+            cloud_sessions("POST", row)
+        else:
+            get_db().execute("INSERT INTO study_sessions (course, minutes, day, started_at, created_at) VALUES (?, ?, ?, ?, ?)",
+                             (course, minutes, row["day"], started, datetime.now().isoformat(timespec="seconds")))
+            get_db().commit()
+    except StudyStorageMissing:
+        return {"saved": 0, "error": "storage"}, 503
+    return {"saved": minutes}
 
 
 @app.get("/focus")

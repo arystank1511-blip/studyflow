@@ -372,6 +372,28 @@ def register_auth(app):
         return {"status": "ok" if ready_now else "unavailable"}, 200 if ready_now else 503
 
 
+class StudyStorageMissing(Exception):
+    """The study-session table has not been created in Supabase yet."""
+
+
+def cloud_sessions(method="GET", data=None, since=None):
+    if not g.get("user") or not g.get("access_token"):
+        abort(401)
+    path = "/rest/v1/studyflow_study_sessions"
+    try:
+        if method == "POST":
+            row = {key: value for key, value in data.items() if key in {"course", "minutes", "day", "started_at"}}
+            row["user_id"] = g.user["id"]
+            return api("POST", path, token=g.access_token, data=row, headers={"Prefer": "return=minimal"})
+        return api("GET", path, token=g.access_token, params={
+            "user_id": "eq." + g.user["id"], "day": "gte." + since, "select": "course,minutes,day",
+            "order": "day.asc", "limit": 5000})
+    except CloudError as error:
+        if error.status == 404:
+            raise StudyStorageMissing() from None
+        abort(503)
+
+
 def cloud_tasks(method="GET", task_id=None, data=None):
     # Never accept ownership or raw query expressions from a form.
     if not g.get("user") or not g.get("access_token"):

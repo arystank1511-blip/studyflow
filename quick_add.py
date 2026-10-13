@@ -16,7 +16,7 @@ import re
 from datetime import date, timedelta
 
 PRIORITIES = {
-    "high": "High", "высокий": "High", "срочно": "High", "жоғары": "High", "шұғыл": "High", "1": "High", "!!": "High",
+    "high": "High", "высокий": "High", "срочно": "High", "жоғары": "High", "маңызды": "High", "шұғыл": "High", "1": "High", "!!": "High",
     "medium": "Medium", "средний": "Medium", "орташа": "Medium", "2": "Medium", "!": "Medium",
     "low": "Low", "низкий": "Low", "төмен": "Low", "3": "Low", "": "Low",
 }

@@ -7,12 +7,13 @@
   </header>
   <aside class="sidebar" aria-label="{{ t("Workspace navigation") }}">
     <nav class="side-nav">
-      {% for key, endpoint, label in [('dashboard', 'index', 'Tasks & plan'), ('focus', 'focus', 'Focus'), ('progress', 'progress', 'Progress tracking')] %}
-      <a class="{{ 'active' if page == key }}" {% if page == key %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}">
+      {% for key, endpoint, label in [('dashboard', 'index', 'Tasks & plan'), ('schedule', 'schedule', 'Timetable'), ('study', 'study', 'Study'), ('progress', 'progress', 'Progress tracking')] %}
+      {% set current = page == key or (key == 'study' and page == 'focus') %}
+      <a class="{{ 'active' if current }}" {% if current %}aria-current="page"{% endif %} href="{{ url_for(endpoint) }}">
         <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-          {% if key == 'dashboard' %}<path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M8 2v4 M16 2v4 M3 9h18 M10 15a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/>{% elif key == 'focus' %}<path d="M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 9v4l3 2 M9 2h6"/>{% else %}<path d="M5 20V11 M11 20V5 M17 20v-7 M3 20h18"/>{% endif %}
+          {% if key == 'dashboard' %}<path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M8 2v4 M16 2v4 M3 9h18 M10 15a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/>{% elif key == 'schedule' %}<path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z M9 13a3 3 0 1 0 6 0a3 3 0 1 0-6 0"/>{% elif key == 'study' %}<path d="M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 9v4l3 2 M9 2h6"/>{% else %}<path d="M5 20V11 M11 20V5 M17 20v-7 M3 20h18"/>{% endif %}
         </svg>
-        <span class="desktop-nav-label">{{ t(label) }}</span><span class="mobile-nav-label">{{ t({'dashboard': 'Today', 'focus': 'Focus', 'progress': 'Progress'}[key]) }}</span>
+        <span class="desktop-nav-label">{{ t(label) }}</span><span class="mobile-nav-label">{{ t({'dashboard': 'Today', 'schedule': 'Timetable', 'study': 'Study', 'progress': 'Progress'}[key]) }}</span>
       </a>
       {% endfor %}
     </nav>
