@@ -77,6 +77,18 @@
     setTimeout(() => { whatsNew.hidden = true; }, motionOk ? 260 : 0);
   });
 
+  // "Copy the link" buttons.
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('[data-copy]');
+    const source = button && document.querySelector(button.dataset.copy);
+    if (!source) return;
+    source.select();
+    try { await navigator.clipboard.writeText(source.value); } catch { document.execCommand?.('copy'); }
+    const label = button.textContent;
+    button.textContent = button.dataset.copied;
+    setTimeout(() => { button.textContent = label; }, 2000);
+  });
+
   // Install button appears only where the browser supports installing.
   let installPrompt;
   window.addEventListener('beforeinstallprompt', event => {

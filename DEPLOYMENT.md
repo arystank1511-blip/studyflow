@@ -20,6 +20,7 @@ StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase man
 ### Study timer and timetable scanning
 
 - Run `supabase/study_sessions.sql` once in the SQL Editor. Until then the Study page says time cannot be saved; nothing else breaks.
+- Run `supabase/calendar_feed.sql` once for calendar subscriptions (Progress → Subscribe in your calendar). Only a SHA-256 hash of each secret link is stored; calendar apps read unfinished tasks through the `studyflow_calendar_feed` function without signing in. Until the file is run, the Progress page says the subscription is not connected.
 - For timetable photos, create an API key at console.anthropic.com (billing required) and add it on Vercel as `ANTHROPIC_API_KEY` (Production). Set a monthly spend limit in the Anthropic console. Photos are sent to Anthropic only to read the text and are not stored by StudyFlow. Without the key the upload form is hidden.
 
 ## 2. Local cloud smoke test

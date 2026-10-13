@@ -314,6 +314,13 @@ label > span { font-weight: 400; color: var(--text-3); }
 .export-panel h2 { font-size: 19px; }
 .export-panel p { margin: 6px 0 0; max-width: 52ch; color: var(--text-2); font-size: 14px; }
 .export-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.feed-panel { display: grid; gap: 12px; padding-bottom: 18px; }
+.feed-panel h2 { font-size: 19px; }
+.feed-panel p { margin: 0; max-width: 60ch; color: var(--text-2); font-size: 14px; }
+.feed-link { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.feed-copy { display: flex; gap: 8px; flex-wrap: wrap; }
+.feed-copy input { flex: 1 1 220px; min-width: 0; font-family: inherit; font-size: 14px; }
+.feed-panel .feed-warning { color: var(--pen-red); }
 .edit-board { padding-bottom: 18px; }
 .task-form { display: grid; gap: 16px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -9,7 +10,7 @@ import zlib
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, Response, abort, send_from_directory, flash, g, has_request_context, redirect, render_template, request, session, url_for
@@ -17,7 +18,8 @@ from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
 import schedule_scan
 from dotenv import load_dotenv
-from cloud import StudyStorageMissing, cloud_sessions, cloud_tasks, register_auth, valid_config
+from cloud import (FeedStorageMissing, StudyStorageMissing, cloud_feed, cloud_sessions, cloud_tasks, feed_tasks,
+                   register_auth, valid_config)
 from werkzeug.exceptions import SecurityError
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -259,6 +261,11 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS study_sessions_day ON study_sessions(day);
+            CREATE TABLE IF NOT EXISTS calendar_feed (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                token_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         db.commit()
@@ -364,7 +371,68 @@ def planner():
 def progress():
     tasks = sorted(all_tasks(), key=lambda task: task["due_date"])
     metrics = task_metrics(tasks)
-    return render_template("progress.html", metrics=metrics, courses=course_progress(tasks), page="progress")
+    feed_url = session.pop("feed_url", None)  # The secret link is shown once, right after it is made.
+    return render_template("progress.html", metrics=metrics, courses=course_progress(tasks), page="progress",
+                           feed=calendar_feed_state(), feed_url=feed_url,
+                           google_feed_url=feed_url and "https://calendar.google.com/calendar/render?" + urlencode({"cid": re.sub(r"^https?://", "webcal://", feed_url)}),
+                           webcal_url=feed_url and re.sub(r"^https?://", "webcal://", feed_url))
+
+
+def calendar_feed_state():
+    if app.config["CLOUD_MODE"]:
+        try:
+            rows = cloud_feed()
+        except FeedStorageMissing:
+            return {"ready": False, "on": False}
+        return {"ready": True, "on": bool(rows), "since": str(rows[0]["created_at"])[:10] if rows else None}
+    row = get_db().execute("SELECT created_at FROM calendar_feed WHERE id = 1").fetchone()
+    return {"ready": True, "on": row is not None, "since": row["created_at"][:10] if row else None}
+
+
+@app.post("/calendar/subscription")
+def calendar_subscription():
+    action = request.form.get("action")
+    if action not in {"create", "off"}:
+        abort(400)
+    token = secrets.token_urlsafe(32) if action == "create" else None
+    digest = hashlib.sha256(token.encode()).hexdigest() if token else None
+    if app.config["CLOUD_MODE"]:
+        try:
+            cloud_feed("POST" if token else "DELETE", digest)
+        except FeedStorageMissing:
+            flash("Calendar subscription is not connected yet: the site owner needs to run supabase/calendar_feed.sql in Supabase.", "error")
+            return redirect(url_for("progress"))
+    else:
+        db = get_db()
+        db.execute("DELETE FROM calendar_feed")
+        if token:
+            db.execute("INSERT INTO calendar_feed (id, token_hash, created_at) VALUES (1, ?, ?)", (digest, datetime.now(timezone.utc).isoformat()))
+        db.commit()
+    if token:
+        scheme = "https" if app.config["SESSION_COOKIE_SECURE"] else request.scheme
+        session["feed_url"] = url_for("calendar_feed", token=token, _external=True, _scheme=scheme)
+        flash("Your calendar link is ready.", "success")
+    else:
+        flash("Calendar subscription turned off. The old link no longer works.", "success")
+    return redirect(url_for("progress", _anchor="calendar-feed"))
+
+
+@app.get("/calendar/feed/<token>.ics")
+def calendar_feed(token: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+        abort(404)
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    if app.config["CLOUD_MODE"]:
+        tasks = feed_tasks(digest)
+    else:
+        row = get_db().execute("SELECT token_hash FROM calendar_feed WHERE id = 1").fetchone()
+        matches = row is not None and secrets.compare_digest(row["token_hash"], digest)
+        tasks = [task for task in get_db().execute("SELECT * FROM tasks").fetchall() if task["status"] != "Done"] if matches else None
+    if tasks is None:
+        abort(404)
+    response = Response(ics_calendar(tasks, refresh=True), mimetype="text/calendar")
+    response.headers["Content-Disposition"] = 'inline; filename="studyflow.ics"'
+    return response
 
 
 def ical_text(value: str) -> str:
@@ -400,12 +468,17 @@ def service_worker():
 
 @app.get("/calendar.ics")
 def calendar_export():
+    return download(ics_calendar([task for task in all_tasks() if task["status"] != "Done"]), "text/calendar", "studyflow.ics")
+
+
+def ics_calendar(tasks, refresh=False) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//StudyFlow//Deadlines//EN", "CALSCALE:GREGORIAN",
              "X-WR-CALNAME:StudyFlow"]
-    for task in sorted(all_tasks(), key=lambda item: (item["due_date"], item["id"])):
-        if task["status"] == "Done":
-            continue
+    if refresh:
+        # Subscribed calendars: ask apps to check back hourly (many still choose their own interval).
+        lines += ["REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
+    for task in sorted(tasks, key=lambda item: (str(item["due_date"]), item["id"])):
         start = date.fromisoformat(str(task["due_date"]))
         lines += ["BEGIN:VEVENT", f"UID:studyflow-task-{task['id']}@studyflow", f"DTSTAMP:{stamp}",
                   f"DTSTART;VALUE=DATE:{start:%Y%m%d}", f"DTEND;VALUE=DATE:{start + timedelta(days=1):%Y%m%d}",
@@ -415,7 +488,7 @@ def calendar_export():
                   "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + ical_text(task["title"]), "TRIGGER:-PT15H", "END:VALARM",
                   "END:VEVENT"]
     lines.append("END:VCALENDAR")
-    return download("\r\n".join(ical_fold(line) for line in lines) + "\r\n", "text/calendar", "studyflow.ics")
+    return "\r\n".join(ical_fold(line) for line in lines) + "\r\n"
 
 
 @app.get("/export.json")

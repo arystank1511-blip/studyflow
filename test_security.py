@@ -53,6 +53,8 @@ class CloudSecurityTests(unittest.TestCase):
                 return [{"id": 1, "user_id": ALICE, "title": "Alice private note", "course": "Algorithms",
                          "due_date": "2026-12-31", "priority": "Medium", "status": "To do", "notes": "<script>alert(1)</script>"}]
             return []
+        if path == "/rest/v1/studyflow_calendar_feeds" and method == "GET":
+            return []
         raise AssertionError((method, path))
 
     def test_confirmed_token_is_not_rechecked_on_every_page(self):
@@ -78,6 +80,32 @@ class CloudSecurityTests(unittest.TestCase):
         self.client.set_cookie("sf_access", token(int(time.time()) + 30))
         with patch("cloud.api", side_effect=CloudError(401)):
             self.assertEqual(self.client.get("/focus").location, "/login")
+
+    def test_calendar_feed_uses_hash_and_anonymous_rpc(self):
+        token = "a" * 43
+        digest = __import__("hashlib").sha256(token.encode()).hexdigest()
+        row = {"id": 5, "title": "Essay", "course": "Law", "due_date": "2026-12-01", "priority": "High", "notes": ""}
+        with patch("cloud.api", return_value=[row]) as remote:
+            response = app.test_client().get(f"/calendar/feed/{token}.ics")
+        self.assertIn(b"SUMMARY:Essay", response.data)
+        self.assertEqual(remote.call_args.args, ("POST", "/rest/v1/rpc/studyflow_calendar_feed"))
+        self.assertEqual(remote.call_args.kwargs["data"], {"feed_hash": digest})
+        self.assertIsNone(remote.call_args.kwargs.get("token"))
+        with patch("cloud.api", return_value=None):
+            self.assertEqual(app.test_client().get(f"/calendar/feed/{token}.ics").status_code, 404)
+        self.sign_in()
+        calls = []
+        def provider(method, path, **kwargs):
+            if path == "/auth/v1/user":
+                return self.provider(method, path, **kwargs)
+            calls.append((method, path, kwargs.get("params"), kwargs.get("data")))
+            return [] if method == "GET" else None
+        with patch("cloud.api", side_effect=provider), patch("app.cloud_tasks", return_value=[]):
+            self.post("/calendar/subscription", action="create")
+        self.assertEqual([c[0] for c in calls], ["DELETE", "POST"])
+        self.assertEqual(calls[0][2], {"user_id": "eq." + ALICE})
+        self.assertEqual(calls[1][3]["user_id"], ALICE)
+        self.assertRegex(calls[1][3]["token_hash"], r"^[0-9a-f]{64}$")
 
     def test_anonymous_cannot_read_or_write(self):
         with patch("cloud.api") as remote:

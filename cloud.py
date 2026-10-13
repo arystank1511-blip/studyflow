@@ -132,7 +132,7 @@ def load_identity():
             abort(403)
         return
     public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
-              "google_login", "auth_callback", "change_language", "health", "service_worker"}
+              "google_login", "auth_callback", "change_language", "health", "service_worker", "calendar_feed"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
@@ -455,6 +455,40 @@ def cloud_sessions(method="GET", data=None, since=None):
     except CloudError as error:
         if error.status == 404:
             raise StudyStorageMissing() from None
+        abort(503)
+
+
+class FeedStorageMissing(Exception):
+    """The calendar-feed table has not been created in Supabase yet."""
+
+
+def cloud_feed(method="GET", token_hash=None):
+    """Read, replace (POST) or remove (DELETE) the signed-in student's calendar link."""
+    if not g.get("user") or not g.get("access_token"):
+        abort(401)
+    path = "/rest/v1/studyflow_calendar_feeds"
+    owner = {"user_id": "eq." + g.user["id"]}
+    try:
+        if method == "GET":
+            return api("GET", path, token=g.access_token, params={**owner, "select": "created_at"})
+        api("DELETE", path, token=g.access_token, params=owner)
+        if method == "POST":
+            api("POST", path, token=g.access_token, data={"user_id": g.user["id"], "token_hash": token_hash},
+                headers={"Prefer": "return=minimal"})
+        return None
+    except CloudError as error:
+        if error.status == 404:
+            raise FeedStorageMissing() from None
+        abort(503)
+
+
+def feed_tasks(token_hash):
+    """Unfinished tasks behind a calendar link, or None for an unknown link. No user session is involved."""
+    try:
+        return api("POST", "/rest/v1/rpc/studyflow_calendar_feed", data={"feed_hash": token_hash})
+    except CloudError as error:
+        if error.status == 404:
+            return None
         abort(503)
 
 
