@@ -135,7 +135,7 @@
   });
 
   // One open task menu at a time; Escape or a tap outside closes it.
-  const menus = document.querySelectorAll('.task-more');
+  const menus = document.querySelectorAll('.task-more, .prefs-menu');
   menus.forEach(menu => menu.addEventListener('toggle', () => {
     if (menu.open) menus.forEach(other => { if (other !== menu) other.open = false; });
   }));

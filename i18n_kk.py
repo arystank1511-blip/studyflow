@@ -21,6 +21,8 @@ KK = {
     "Language": "Тіл",
     "English": "Ағылшын тілі",
     "Dark theme": "Қараңғы режим",
+    "Settings": "Баптаулар",
+    "Made by {name}": "Авторы: {name}",
     "Local workspace · only on this computer": "Жергілікті режим · тек осы компьютерде",
     "Cloud sign-in": "Аккаунтқа кіру",
     "Sign in": "Кіру",
