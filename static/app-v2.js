@@ -92,12 +92,13 @@
     document.querySelectorAll('[data-install]').forEach(other => { other.hidden = true; });
   }));
 
+  const enhance = setup => { window.StudyFlow.enhancers.push(setup); setup(document); };
+
   // Undo toast leaves after a while; the change stays undoable until the next page.
-  const undoToast = document.querySelector('[data-undo-toast]');
-  if (undoToast) setTimeout(() => undoToast.classList.add('is-leaving'), 8000);
+  enhance(root => root.querySelectorAll('[data-undo-toast]').forEach(toast => setTimeout(() => toast.classList.add('is-leaving'), 8000)));
 
   // Swipe a task on a touch screen: right = done, left = tomorrow.
-  document.querySelectorAll('.work-task').forEach(row => {
+  enhance(root => root.querySelectorAll('.work-task').forEach(row => {
     const doneForm = row.querySelector('.quick-done-form');
     const snoozeForm = row.querySelector('form[action*="/snooze"]');
     let startX = 0, startY = 0, dx = 0, tracking = false, decided = false;
@@ -126,25 +127,26 @@
       tracking = false;
       row.classList.add('swipe-release');
       if (dx > 90) doneForm.querySelector('button').click();
-      else if (dx < -90 && snoozeForm) HTMLFormElement.prototype.submit.call(snoozeForm);
+      else if (dx < -90 && snoozeForm) (window.StudyFlow.send || (form => HTMLFormElement.prototype.submit.call(form)))(snoozeForm);
       row.style.setProperty('--swipe', '0px');
       setTimeout(() => row.classList.remove('is-swiping', 'swipe-release', 'swipe-done', 'swipe-later'), 250);
     };
     row.addEventListener('pointerup', finish);
     row.addEventListener('pointercancel', finish);
-  });
+  }));
 
   // One open task menu at a time; Escape or a tap outside closes it.
-  const menus = document.querySelectorAll('.task-more, .prefs-menu');
-  menus.forEach(menu => menu.addEventListener('toggle', () => {
-    if (menu.open) menus.forEach(other => { if (other !== menu) other.open = false; });
-  }));
+  const menus = () => document.querySelectorAll('.task-more, .prefs-menu');
+  document.addEventListener('toggle', event => {
+    const menu = event.target;
+    if (menu.matches?.('.task-more, .prefs-menu') && menu.open) menus().forEach(other => { if (other !== menu) other.open = false; });
+  }, true);
   document.addEventListener('click', event => {
-    menus.forEach(menu => { if (menu.open && !menu.contains(event.target)) menu.open = false; });
+    menus().forEach(menu => { if (menu.open && !menu.contains(event.target)) menu.open = false; });
   });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    menus.forEach(menu => { if (menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+    menus().forEach(menu => { if (menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
   });
 
   // Focus timer.

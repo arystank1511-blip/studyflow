@@ -250,6 +250,7 @@ label > span { font-weight: 400; color: var(--text-3); }
 .due.late { color: var(--pen-red); font-weight: 600; }
 .work-task.is-done h3 { color: var(--text-3); text-decoration: line-through; text-decoration-color: var(--ink); text-decoration-thickness: 2px; }
 .work-task.is-done .work-task-details { opacity: .75; }
+.work-task.is-pending { opacity: .55; pointer-events: none; transition: opacity .2s ease; }
 .task-notes { margin-top: 6px; font-size: 14px; color: var(--text-2); }
 .task-notes summary { width: max-content; min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--text-3); font-size: 13px; }
 .task-notes p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

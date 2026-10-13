@@ -43,9 +43,9 @@
   </aside>
   <main class="dashboard" id="main-content" tabindex="-1">
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}<div class="messages" role="status">{% for category, message in messages %}<p class="flash {{ category }}">{{ t(message) }}</p>{% endfor %}</div>{% endif %}
+      <div data-live="messages">{% if messages %}<div class="messages" role="status">{% for category, message in messages %}<p class="flash {{ category }}">{{ t(message) }}</p>{% endfor %}</div>{% endif %}</div>
     {% endwith %}
-    {% if undo %}<div class="undo-toast" role="status" data-undo-toast><span>{{ t(undo.message) }}</span><form method="post" action="{{ url_for('undo_change', task_id=undo.id, **(filters|default({}))) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button type="submit">{{ t('Undo') }}</button></form></div>{% endif %}
+    <div data-live="undo">{% if undo %}<div class="undo-toast" role="status" data-undo-toast><span>{{ t(undo.message) }}</span><form method="post" action="{{ url_for('undo_change', task_id=undo.id, **(filters|default({}))) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button type="submit">{{ t('Undo') }}</button></form></div>{% endif %}</div>
     {% block dashboard_content %}{% endblock %}
   </main>
 </div>
