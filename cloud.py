@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import secrets
-from urllib.parse import urlsplit
+import time
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 import httpx
@@ -65,7 +67,7 @@ def api(method, path, *, token=None, data=None, params=None, headers=None):
 
 def authenticated_user(token):
     user = api("GET", "/auth/v1/user", token=token)
-    # With Confirm Email disabled, this is account eligibility, NOT mailbox proof.
+    # Supabase sets this once the mailbox owner has entered a code or followed a link.
     if not isinstance(user, dict) or not user.get("email_confirmed_at"):
         raise CloudError(401)
     try:
@@ -91,7 +93,8 @@ def load_identity():
                                         request.host.split(":")[0] not in {"127.0.0.1", "localhost"}):
             abort(403)
         return
-    public = {"static", "login", "register", "verify_login", "change_language", "health"}
+    public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
+              "google_login", "auth_callback", "change_language", "health"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
@@ -147,62 +150,209 @@ def secure_response(response):
     return response
 
 
+def valid_email(email):
+    return len(email) <= 254 and re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) is not None
+
+
+def password_problem(password, confirm):
+    if not password or len(password) < 15 or len(password.encode("utf-8")) > 72:
+        return "Use at least 15 characters and at most 72 UTF-8 bytes."
+    if not secrets.compare_digest(password.encode("utf-8"), confirm.encode("utf-8")):
+        return "Passwords do not match."
+    return None
+
+
+def auth_failure(error, rejected):
+    """Map a provider error to a generic message and status; never echo provider details."""
+    if error.status == 429:
+        return "Too many attempts. Please try again later.", 429
+    if error.status in (400, 401, 403, 404, 422):
+        return rejected, 400
+    return "Sign-in is temporarily unavailable. Please try again later.", 503
+
+
+def pkce_challenge(verifier):
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def register_auth(app):
     app.before_request(load_identity)
     app.after_request(secure_response)
 
-    def password_form(signup=False):
-        error = None
-        email = ""
-        ready = app.config["CLOUD_MODE"] and app.config["CLOUD_READY"]
-        if request.method == "POST":
-            if not ready:
-                abort(503)
-            email = request.form.get("email", "").strip().lower()
-            password = request.form.get("password", "")
-            if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
-                error = "Enter a valid email address."
-            elif not password or len(password.encode("utf-8")) > 72 or (signup and len(password) < 15):
-                error = "Use at least 15 characters and at most 72 UTF-8 bytes." if signup else "Email or password is incorrect."
-            elif signup and not secrets.compare_digest(password.encode("utf-8"), request.form.get("password_confirm", "").encode("utf-8")):
-                error = "Passwords do not match."
-            else:
-                try:
-                    # Passwords go only to Supabase over HTTPS, never into our
-                    # database, session, logs, templates, or task metadata.
-                    result = api("POST", "/auth/v1/signup" if signup else "/auth/v1/token",
-                                 params=None if signup else {"grant_type": "password"},
-                                 data={"email": email, "password": password})
-                    accept_tokens(result)  # Missing session => fail closed.
-                    session.clear()
-                    session["csrf_token"] = secrets.token_hex(32)
-                    flash("You are signed in.", "success")
-                    return redirect(url_for("index"))
-                except CloudError as exc:
-                    if exc.status == 429:
-                        error = "Too many attempts. Please try again later."
-                    elif exc.status in (400, 401, 403, 422):
-                        error = "Could not create an account. Try signing in or use another email." if signup else "Email or password is incorrect."
-                    else:
-                        error = "Sign-in is temporarily unavailable. Please try again later."
-                    status = 429 if exc.status == 429 else 400 if exc.status in (400, 401, 403, 422) else 503
-                    return render_template("auth.html", signup=signup, error=error, email=email, ready=ready), status
-        return render_template("auth.html", signup=signup, error=error, email=email, ready=ready), 400 if error else 200
+    def ready():
+        return app.config["CLOUD_MODE"] and app.config["CLOUD_READY"]
+
+    def page(mode, status=200, **context):
+        context.setdefault("email", "")
+        return render_template("auth.html", mode=mode, ready=ready(), google=app.config.get("GOOGLE_LOGIN", False),
+                               error=context.pop("error", None), **context), status
+
+    def start_session(result):
+        accept_tokens(result)  # Missing or unverified session => CloudError, fail closed.
+        session.clear()
+        session["csrf_token"] = secrets.token_hex(32)
+        flash("You are signed in.", "success")
+        return redirect(url_for("index"))
+
+    def remember_code_request(email, purpose):
+        session["otp_email"], session["otp_purpose"], session["otp_sent_at"] = email, purpose, int(time.time())
+
+    def require_ready():
+        if not ready():
+            abort(503)
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        return password_form()
+        if request.method == "GET":
+            return page("login")
+        require_ready()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        if not valid_email(email):
+            return page("login", 400, email=email, error="Enter a valid email address.")
+        if not password or len(password.encode("utf-8")) > 72:
+            return page("login", 400, email=email, error="Email or password is incorrect.")
+        try:
+            # Passwords go only to Supabase over HTTPS, never into our
+            # database, session, logs, templates, or task metadata.
+            return start_session(api("POST", "/auth/v1/token", params={"grant_type": "password"},
+                                     data={"email": email, "password": password}))
+        except CloudError as error:
+            message, status = auth_failure(error, "Email or password is incorrect.")
+            return page("login", status, email=email, error=message)
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
-        return password_form(signup=True)
+        if request.method == "GET":
+            return page("register")
+        require_ready()
+        email = request.form.get("email", "").strip().lower()
+        if not valid_email(email):
+            return page("register", 400, email=email, error="Enter a valid email address.")
+        problem = password_problem(request.form.get("password", ""), request.form.get("password_confirm", ""))
+        if problem:
+            return page("register", 400, email=email, error=problem)
+        try:
+            result = api("POST", "/auth/v1/signup", data={"email": email, "password": request.form["password"]})
+            if isinstance(result, dict) and result.get("access_token"):
+                return start_session(result)  # Only when the provider has confirmation turned off.
+        except CloudError as error:
+            message, status = auth_failure(error, "Could not create an account. Try signing in or use another email.")
+            return page("register", status, email=email, error=message)
+        # Confirmation is on. The provider answers the same way for an address that already
+        # exists, so the next screen never reveals whether someone is registered.
+        remember_code_request(email, "signup")
+        flash("We sent a confirmation code to your email.", "success")
+        return redirect(url_for("verify_login"))
+
+    @app.route("/login/code", methods=["GET", "POST"])
+    def login_code():
+        if request.method == "GET":
+            return page("code", email=session.get("otp_email", ""))
+        require_ready()
+        email = request.form.get("email", "").strip().lower()
+        if not valid_email(email):
+            return page("code", 400, email=email, error="Enter a valid email address.")
+        if session.get("otp_email") == email and time.time() - session.get("otp_sent_at", 0) < 60:
+            return page("code", 429, email=email, error="Wait a minute before requesting another code.")
+        try:
+            api("POST", "/auth/v1/otp", data={"email": email, "create_user": True})
+        except CloudError as error:
+            message, status = auth_failure(error, "Could not send a code. Please try again later.")
+            return page("code", status, email=email, error=message)
+        remember_code_request(email, "login")
+        flash("We sent a sign-in code to your email.", "success")
+        return redirect(url_for("verify_login"))
 
     @app.route("/login/verify", methods=["GET", "POST"])
     def verify_login():
-        # Retire old bookmarks without sending emails.
-        session.pop("otp_email", None)
-        session.pop("otp_sent_at", None)
-        return redirect(url_for("login"))
+        email = session.get("otp_email")
+        if not email:
+            return redirect(url_for("login_code"))
+        if request.method == "GET":
+            return page("verify", email=email)
+        require_ready()
+        code = re.sub(r"\s", "", request.form.get("code", ""))
+        if not re.fullmatch(r"\d{6,10}", code):
+            return page("verify", 400, email=email, error="The code is invalid or expired. Request a new code.")
+        try:
+            return start_session(api("POST", "/auth/v1/verify", data={"type": "email", "email": email, "token": code}))
+        except CloudError as error:
+            message, status = auth_failure(error, "The code is invalid or expired. Request a new code.")
+            return page("verify", status, email=email, error=message)
+
+    @app.route("/password/forgot", methods=["GET", "POST"])
+    def forgot_password():
+        if request.method == "GET":
+            return page("forgot")
+        require_ready()
+        email = request.form.get("email", "").strip().lower()
+        if not valid_email(email):
+            return page("forgot", 400, email=email, error="Enter a valid email address.")
+        try:
+            api("POST", "/auth/v1/recover", data={"email": email})
+        except CloudError as error:
+            if error.status == 429 or error.status >= 500:
+                message, status = auth_failure(error, "")
+                return page("forgot", status, email=email, error=message)
+            # Any other refusal looks like success, so the form cannot test which emails exist.
+        session["reset_email"], session["reset_sent_at"] = email, int(time.time())
+        flash("If this email has an account, we sent a reset code.", "success")
+        return redirect(url_for("reset_password"))
+
+    @app.route("/password/reset", methods=["GET", "POST"])
+    def reset_password():
+        email = session.get("reset_email")
+        if not email:
+            return redirect(url_for("forgot_password"))
+        if request.method == "GET":
+            return page("reset", email=email)
+        require_ready()
+        code = re.sub(r"\s", "", request.form.get("code", ""))
+        problem = password_problem(request.form.get("password", ""), request.form.get("password_confirm", ""))
+        if not re.fullmatch(r"\d{6,10}", code):
+            problem = "The code is invalid or expired. Request a new code."
+        if problem:
+            return page("reset", 400, email=email, error=problem)
+        try:
+            result = api("POST", "/auth/v1/verify", data={"type": "recovery", "email": email, "token": code})
+            if not isinstance(result, dict) or not result.get("access_token"):
+                raise CloudError(401)
+            api("PUT", "/auth/v1/user", token=result["access_token"], data={"password": request.form["password"]})
+            response = start_session(result)
+        except CloudError as error:
+            message, status = auth_failure(error, "The code is invalid or expired. Request a new code.")
+            return page("reset", status, email=email, error=message)
+        flash("Your password has been changed.", "success")
+        return response
+
+    @app.get("/auth/google")
+    def google_login():
+        if not ready() or not app.config.get("GOOGLE_LOGIN"):
+            abort(404)
+        verifier = secrets.token_urlsafe(64)
+        session["pkce_verifier"] = verifier
+        scheme = "https" if app.config["SESSION_COOKIE_SECURE"] else request.scheme
+        query = urlencode({"provider": "google", "redirect_to": url_for("auth_callback", _external=True, _scheme=scheme),
+                           "code_challenge": pkce_challenge(verifier), "code_challenge_method": "s256"})
+        return redirect(app.config["SUPABASE_URL"].rstrip("/") + "/auth/v1/authorize?" + query)
+
+    @app.get("/auth/callback")
+    def auth_callback():
+        # The verifier lives only in this browser's session, so a code started elsewhere cannot sign anyone in.
+        verifier = session.pop("pkce_verifier", None)
+        code = request.args.get("code", "")
+        if not ready() or not verifier or not code or len(code) > 512:
+            flash("Google sign-in did not finish. Please try again.", "error")
+            return redirect(url_for("login"))
+        try:
+            return start_session(api("POST", "/auth/v1/token", params={"grant_type": "pkce"},
+                                     data={"auth_code": code, "code_verifier": verifier}))
+        except CloudError as error:
+            message, _ = auth_failure(error, "Google sign-in did not finish. Please try again.")
+            flash(message, "error")
+            return redirect(url_for("login"))
 
     @app.post("/logout")
     def logout():
@@ -218,8 +368,8 @@ def register_auth(app):
 
     @app.get("/health")
     def health():
-        ready = not app.config["CLOUD_MODE"] or app.config["CLOUD_READY"]
-        return {"status": "ok" if ready else "unavailable"}, 200 if ready else 503
+        ready_now = not app.config["CLOUD_MODE"] or app.config["CLOUD_READY"]
+        return {"status": "ok" if ready_now else "unavailable"}, 200 if ready_now else 503
 
 
 def cloud_tasks(method="GET", task_id=None, data=None):

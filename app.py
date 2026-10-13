@@ -45,6 +45,8 @@ app.config.update(
     CLOUD_READY=valid_config(SUPABASE_URL, SUPABASE_KEY) and len(SECRET_KEY) >= 32 and (not ON_VERCEL or bool(allowed_hosts)),
     SUPABASE_URL=SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY=SUPABASE_KEY,
+    # Turn on only after the Google provider and redirect URL are configured in Supabase.
+    GOOGLE_LOGIN=os.environ.get("STUDYFLOW_GOOGLE_LOGIN") == "1",
 )
 
 
