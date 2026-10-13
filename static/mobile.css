@@ -1,6 +1,6 @@
 /* Shared language control; a dedicated thumb-friendly layout below 720px. */
 .language-switch { display:flex; align-items:center; gap:2px; padding:3px; border:1px solid #ffffff30; border-radius:10px; background:#ffffff09; }
-.language-switch button { border:0; background:transparent; color:#d3e8dd; font:600 12px 'Golos Text',sans-serif; min-width:38px; min-height:38px; border-radius:7px; cursor:pointer; }
+.language-switch button { border:0; background:transparent; color:#d3e8dd; font:600 12px 'Onest',sans-serif; min-width:38px; min-height:38px; border-radius:7px; cursor:pointer; }
 .language-switch button[aria-pressed=true] { background:#e0f1e5; color:#173e2a; }
 .language-switch button:hover { background:#ffffff26; color:#fff; }
 .language-switch button[aria-pressed=true]:hover { background:#f0fff4; color:#173e2a; }

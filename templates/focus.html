@@ -1,0 +1,44 @@
+{% extends 'layout.html' %}
+{% block title %}{{ t('Focus') }} · StudyFlow{% endblock %}
+{% block dashboard_content %}
+<header class="page-intro"><div><p class="eyebrow">{{ t('FOCUS') }}</p><h1>{{ t('One task. No distractions.') }}</h1><p>{{ t('Work in focused blocks with short breaks. Finish the task right from here.') }}</p></div></header>
+<section class="focus-board workspace-board" data-focus aria-labelledby="focus-task">
+  {% if current %}
+  <form class="focus-picker" method="get" action="{{ url_for('focus') }}">
+    <label for="focus-select">{{ t('Task') }}</label>
+    <select id="focus-select" name="task" data-focus-select>{% for task in tasks %}<option value="{{ task.id }}" {{ 'selected' if task.id == current.id }}>{{ task.title }} · {{ task.course }}</option>{% endfor %}</select>
+    <noscript><button class="secondary" type="submit">{{ t('Choose') }}</button></noscript>
+  </form>
+  <div class="focus-task"><span class="course" style="--course: {{ course_color(current.course) }}">{{ current.course }}</span><h2 id="focus-task">{{ current.title }}</h2></div>
+
+  <div class="focus-modes" role="group" aria-label="{{ t('Session length') }}">
+    <button type="button" data-focus-mode data-minutes="25" data-break="5" aria-pressed="true">25 / 5</button>
+    <button type="button" data-focus-mode data-minutes="50" data-break="10" aria-pressed="false">50 / 10</button>
+    <button type="button" data-focus-mode data-minutes="15" data-break="3" aria-pressed="false">15 / 3</button>
+  </div>
+
+  <div class="focus-ring" data-focus-ring style="--ratio: 0">
+    <svg viewBox="0 0 240 240" aria-hidden="true"><circle class="ring-track" cx="120" cy="120" r="108"/><circle class="ring-value" cx="120" cy="120" r="108" pathLength="100"/></svg>
+    <div class="focus-time"><strong data-focus-time role="timer" aria-live="off">25:00</strong><span data-focus-phase>{{ t('Focus') }}</span></div>
+  </div>
+
+  <div class="focus-controls">
+    <button class="focus-icon-button" type="button" data-focus-reset aria-label="{{ t('Reset timer') }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7 M3 4v5h5"/></svg></button>
+    <button class="primary focus-start" type="button" data-focus-toggle>{{ t('Start') }}</button>
+    <form method="post" action="{{ url_for('update_status', task_id=current.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="focus"><input type="hidden" name="status" value="Done">
+      <button class="focus-icon-button is-done" type="submit" aria-label="{{ t('Mark {title} as done', title=current.title) }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    </form>
+  </div>
+
+  <div class="focus-stats">
+    <div><strong data-focus-sessions>0</strong><span>{{ t('sessions today') }}</span></div>
+    <div><strong data-focus-minutes>0</strong><span>{{ t('minutes in focus today') }}</span></div>
+  </div>
+  <p class="focus-note">{{ t('Stats stay in this browser. Allow notifications to hear when a block ends.') }}</p>
+  <script id="focus-strings" type="application/json">{{ {'focus': t('Focus'), 'break': t('Break'), 'start': t('Start'), 'pause': t('Pause'), 'resume': t('Resume'), 'ended': t('Focus block finished. Time for a break.'), 'back': t('Break is over. Back to work?')}|tojson }}</script>
+  {% else %}
+  <div class="empty"><h3>{{ t('Nothing to focus on') }}</h3><p>{{ t('All tasks are done. Add a new one to start a focus session.') }}</p><button class="primary" type="button" data-open-modal>{{ t('Add task') }} <span aria-hidden="true">+</span></button></div>
+  {% endif %}
+</section>
+{% endblock %}
