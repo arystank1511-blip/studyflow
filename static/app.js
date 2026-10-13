@@ -1,6 +1,6 @@
 const modal = document.getElementById('task-modal');
 const ui = JSON.parse(document.getElementById('ui-strings').textContent);
-const locale = document.documentElement.lang === 'ru' ? 'ru-RU' : 'en-GB';
+const locale = ({ ru: 'ru-RU', kk: 'kk-KZ' })[document.documentElement.lang] || 'en-GB';
 document.querySelectorAll('[data-auto-submit]').forEach(control => {
   control.addEventListener('change', () => control.form.requestSubmit());
 });
@@ -123,7 +123,11 @@ syncThemeButton();
 darkQuery.addEventListener('change', syncThemeButton);
 themeToggle?.addEventListener('click', () => {
   const next = isDark() ? 'light' : 'dark';
-  const apply = () => { document.documentElement.dataset.theme = next; syncThemeButton(); };
+  const apply = () => {
+    document.documentElement.dataset.theme = next;
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => { meta.content = next === 'dark' ? '#15171d' : '#f6f8fb'; });
+    syncThemeButton();
+  };
   try { localStorage.setItem('studyflow-theme', next); } catch { /* Choice lasts for this page only. */ }
   if (document.startViewTransition && !reduceMotion) quietTransition(document.startViewTransition(apply)); else apply();
 });
