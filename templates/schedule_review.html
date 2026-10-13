@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+{% block title %}{{ t('Check your timetable') }} · StudyFlow{% endblock %}
+{% block dashboard_content %}
+{% set day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+<header class="page-intro"><h1>{{ t('Check your timetable') }}</h1><p>{{ t('Fix anything that was read wrong and untick what you do not need. Each class becomes a task on its day.') }}</p></header>
+{% if warnings %}<p class="flash notice" role="status">{{ warnings }}</p>{% endif %}
+<form class="page review-board" method="post" action="{{ url_for('schedule_import') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="count" value="{{ classes|length }}">
+  <div class="review-list">
+    {% for row in classes %}{% set i = loop.index0 %}
+    <fieldset class="review-row" style="--course: {{ course_color(row.course) }}">
+      <legend class="sr-only">{{ row.course }}</legend>
+      <label class="review-include"><input type="checkbox" name="include-{{ i }}" value="1" checked><span class="sr-only">{{ t('Add {course}', course=row.course) }}</span></label>
+      <div class="review-fields">
+        <label class="review-course">{{ t('Course or category') }}<input name="course-{{ i }}" value="{{ row.course }}" maxlength="80" required></label>
+        <label>{{ t('Day') }}<select name="weekday-{{ i }}">{% for name in day_names %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == row.weekday }}>{{ t(name) }}</option>{% endfor %}</select></label>
+        <label>{{ t('Start') }}<input type="time" name="start-{{ i }}" value="{{ row.start }}"></label>
+        <label>{{ t('End') }}<input type="time" name="end-{{ i }}" value="{{ row.end }}"></label>
+        <label>{{ t('Type') }}<select name="kind-{{ i }}">{% for key, label in kinds.items() %}<option value="{{ key }}" {{ 'selected' if key == row.kind }}>{{ t(label) }}</option>{% endfor %}</select></label>
+        <label>{{ t('Room') }}<input name="room-{{ i }}" value="{{ row.room }}" maxlength="30"></label>
+        <label class="review-teacher">{{ t('Teacher') }}<input name="teacher-{{ i }}" value="{{ row.teacher }}" maxlength="60"></label>
+        {% if has_parity %}<label>{{ t('Weeks') }}<select name="parity-{{ i }}">{% for key, label in [('every', 'Every week'), ('odd', 'Odd weeks'), ('even', 'Even weeks')] %}<option value="{{ key }}" {{ 'selected' if key == row.parity }}>{{ t(label) }}</option>{% endfor %}</select></label>{% else %}<input type="hidden" name="parity-{{ i }}" value="every">{% endif %}
+      </div>
+    </fieldset>
+    {% endfor %}
+  </div>
+  <div class="review-options">
+    <label>{{ t('Add classes for') }}<select name="weeks"><option value="1">{{ t('This week') }}</option><option value="2" selected>{{ t('2 weeks') }}</option><option value="4">{{ t('4 weeks') }}</option><option value="8">{{ t('8 weeks') }}</option></select></label>
+    {% if has_parity %}<label>{{ t('This week is') }}<select name="this_week"><option value="odd">{{ t('Odd week') }}</option><option value="even">{{ t('Even week') }}</option></select></label>{% endif %}
+    <div class="review-actions"><button class="primary" type="submit">{{ t('Add to my plan') }}</button><a class="text-button" href="{{ url_for('schedule') }}">{{ t('Try another photo') }}</a></div>
+  </div>
+</form>
+{% endblock %}

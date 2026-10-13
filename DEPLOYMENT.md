@@ -17,6 +17,11 @@ Do not treat offline mocks as proof that a real database has RLS enabled.
 
 StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase manages password hashing, codes and auth sessions. They never enter the application database, cookies, templates or logs. Sign-in options: password, one-time email code (creates the account on first use), password reset by code, and Google (PKCE) when enabled.
 
+### Study timer and timetable scanning
+
+- Run `supabase/study_sessions.sql` once in the SQL Editor. Until then the Study page says time cannot be saved; nothing else breaks.
+- For timetable photos, create an API key at console.anthropic.com (billing required) and add it on Vercel as `ANTHROPIC_API_KEY` (Production). Set a monthly spend limit in the Anthropic console. Photos are sent to Anthropic only to read the text and are not stored by StudyFlow. Without the key the upload form is hidden.
+
 ## 2. Local cloud smoke test
 
 Copy `.env.example` to `.env` and set `STUDYFLOW_MODE=cloud`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and a random `STUDYFLOW_SECRET_KEY` (at least 32 characters). Generate it locally, never paste it into a public issue or chat. Restart `app.py`.

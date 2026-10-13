@@ -1,0 +1,25 @@
+{% extends 'layout.html' %}
+{% block title %}{{ t('Timetable') }} · StudyFlow{% endblock %}
+{% block dashboard_content %}
+<header class="page-intro"><h1>{{ t('Timetable from a photo') }}</h1><p>{{ t('Take a photo of your university or school timetable. StudyFlow reads the classes and turns them into tasks for the coming weeks. You check every row before anything is added.') }}</p></header>
+<section class="page scan-board" aria-labelledby="scan-title">
+  <h2 id="scan-title" class="sr-only">{{ t('Upload a photo') }}</h2>
+  {% if scan_ready %}
+  <form class="scan-form" method="post" action="{{ url_for('schedule_scan_photo') }}" enctype="multipart/form-data" data-scan-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="scan-drop" for="scan-photo">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z M9 13a3 3 0 1 0 6 0a3 3 0 1 0-6 0"/></svg>
+      <strong data-scan-label>{{ t('Choose or take a photo') }}</strong>
+      <span>{{ t('JPEG, PNG or WebP. A straight, well-lit photo works best.') }}</span>
+      <img class="scan-preview" alt="" hidden data-scan-preview>
+    </label>
+    <input class="sr-only" id="scan-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" required data-scan-input>
+    <button class="primary" type="submit" data-scan-submit>{{ t('Read the timetable') }}</button>
+    <p class="scan-note">{{ t('The photo is sent to Claude by Anthropic to read the text, and is not stored by StudyFlow.') }}</p>
+  </form>
+  {% else %}
+  <div class="empty"><h3>{{ t('Timetable scanning is not connected yet.') }}</h3><p>{{ t('The site owner needs to add an Anthropic API key to turn this on.') }}</p></div>
+  {% endif %}
+  <script id="scan-strings" type="application/json">{{ {'reading': t('Reading the timetable… this can take up to a minute.')}|tojson }}</script>
+</section>
+{% endblock %}

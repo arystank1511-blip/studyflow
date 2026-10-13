@@ -266,8 +266,9 @@ class StudyFlowTests(unittest.TestCase):
         for path in ("/", "/planner"):
             page = self.client.get(path).get_data(as_text=True)
             nav = page.split('<nav class="side-nav">')[1].split('</nav>')[0]
-            self.assertEqual(nav.count('<a '), 3)
-            self.assertIn('href="/focus"', nav)
+            self.assertEqual(nav.count('<a '), 4)
+            for link in ('href="/schedule"', 'href="/study"', 'href="/progress"'):
+                self.assertIn(link, nav)
             self.assertNotIn('href="/planner"', nav)
             self.assertIn('id="task-workspace"', page)
             self.assertIn('class="day-add-task"', page)

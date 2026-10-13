@@ -59,7 +59,7 @@
   });
 
   // Installable app with an offline notice.
-  if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') {
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker?.register('/sw.js').catch(() => {});
   }
 
