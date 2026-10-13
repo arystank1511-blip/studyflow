@@ -52,10 +52,13 @@ app.config.update(
 )
 
 
+LANGUAGES = {"ru", "kk", "en"}
+
+
 @app.before_request
 def choose_language():
     saved = request.cookies.get("studyflow_language")
-    g.language = saved if saved in {"ru", "en"} else (request.accept_languages.best_match(["en", "ru"]) or "en")
+    g.language = saved if saved in LANGUAGES else (request.accept_languages.best_match(["en", "ru", "kk"]) or "en")
 
 
 @app.before_request
@@ -67,6 +70,38 @@ def protect_forms():
             abort(400, description="This form has expired. Reload the page and try again.")
 
 
+def shown_undo():
+    undo = session.pop("undo", None)
+    if undo:
+        session["undo_ready"] = undo
+    return undo
+
+
+def offer_undo(task_id, field, previous, message):
+    """Remember the previous value so the next page can offer to restore it."""
+    session["undo"] = {"id": task_id, "field": field, "value": previous, "message": message}
+
+
+def current_task(task_id):
+    if app.config["CLOUD_MODE"]:
+        return cloud_tasks(task_id=task_id)[0]
+    task = get_db().execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if task is None:
+        abort(404)
+    return task
+
+
+def set_task_field(task_id, field, value):
+    if app.config["CLOUD_MODE"]:
+        cloud_tasks("PATCH", task_id, {field: value})
+    else:
+        db = get_db()
+        # Field names come from a fixed allowlist, never from the request.
+        if not db.execute(f"UPDATE tasks SET {field} = ? WHERE id = ?", (value, task_id)).rowcount:
+            abort(404)
+        db.commit()
+
+
 @app.context_processor
 def form_context():
     if "csrf_token" not in session:
@@ -76,6 +111,7 @@ def form_context():
         "csrf_token": session["csrf_token"],
         "task_form": session.pop("task_draft", {}),
         "task_errors": session.pop("task_errors", {}),
+        "undo": shown_undo(),
     }
 
 
@@ -85,8 +121,8 @@ register_auth(app)
 @app.post("/language")
 def change_language():
     language = request.form.get("language", "")
-    if language not in {"ru", "en"}:
-        abort(400, description="Choose English or Russian.")
+    if language not in LANGUAGES:
+        abort(400, description="Choose a supported language.")
     destination = request.form.get("return_to", "/")
     try:
         parsed = urlsplit(destination)
@@ -407,7 +443,7 @@ def insert_task(values):
 
 
 def quick_values(text):
-    parsed = parse_quick_add(text, user_today(), "Общее" if current_language() == "ru" else "General")
+    parsed = parse_quick_add(text, user_today(), {"ru": "Общее", "kk": "Жалпы"}.get(current_language(), "General"))
     errors = {}
     if not parsed["title"] or len(parsed["title"]) > 100:
         errors["title"] = "Enter a task title between 1 and 100 characters."
@@ -504,29 +540,36 @@ def update_status(task_id: int):
     if status not in {"To do", "In progress", "Done"}:
         flash("Invalid task status.", "error")
         return return_to_workspace()
-    if app.config["CLOUD_MODE"]:
-        cloud_tasks("PATCH", task_id, {"status": status})
+    previous = current_task(task_id)["status"]
+    set_task_field(task_id, "status", status)
+    if previous != status:
+        offer_undo(task_id, "status", previous, "Task marked as done." if status == "Done" else "Task status updated.")
     else:
-        db = get_db()
-        result = db.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
-        if not result.rowcount:
-            abort(404)
-        db.commit()
-    flash("Task status updated.", "success")
+        flash("Task status updated.", "success")
+    return return_to_workspace()
+
+
+@app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/undo")
+def undo_change(task_id: int):
+    undo = session.pop("undo_ready", None)
+    if not undo or undo.get("id") != task_id or undo.get("field") not in {"status", "due_date"}:
+        flash("Nothing to undo.", "error")
+        return return_to_workspace()
+    value = undo.get("value")
+    valid = value in {"To do", "In progress", "Done"} if undo["field"] == "status" else bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(value)))
+    if not valid:
+        abort(400)
+    set_task_field(task_id, undo["field"], value)
+    flash("Change undone.", "success")
     return return_to_workspace()
 
 
 @app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/snooze")
 def snooze_task(task_id: int):
     tomorrow = (user_today() + timedelta(days=1)).isoformat()
-    if app.config["CLOUD_MODE"]:
-        cloud_tasks("PATCH", task_id, {"due_date": tomorrow})
-    else:
-        db = get_db()
-        if not db.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (tomorrow, task_id)).rowcount:
-            abort(404)
-        db.commit()
-    flash("Moved to tomorrow.", "success")
+    previous = str(current_task(task_id)["due_date"])
+    set_task_field(task_id, "due_date", tomorrow)
+    offer_undo(task_id, "due_date", previous, "Moved to tomorrow.")
     return return_to_workspace()
 
 
@@ -558,7 +601,7 @@ def friendly_error(error):
                     401: "Please sign in to continue.", 403: "Access is not allowed.",
                     500: "Something went wrong. Please try again later.",
                     503: "The cloud workspace is unavailable. Please try again later."}
-    description = descriptions.get(error.code, error.description if error.description in {"This form has expired. Reload the page and try again.", "Choose English or Russian."} else "Please check the form and try again.")
+    description = descriptions.get(error.code, error.description if error.description in {"This form has expired. Reload the page and try again.", "Choose a supported language."} else "Please check the form and try again.")
     return render_template("error.html", error=error, error_description=description), error.code
 
 

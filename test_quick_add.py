@@ -43,6 +43,14 @@ class QuickAddTests(unittest.TestCase):
         self.check("Data_Structures homework #data_structures !!!", course="data structures", priority="High")
         self.check("Почему 2+2! важно", title="Почему 2+2! важно")
 
+    def test_kazakh_line(self):
+        self.check("Эссе жұма 18:00 !жоғары #философия", title="Эссе", due_date="2026-10-16", priority="High", course="философия", notes="18:00")
+        self.check("Конспект ертең !төмен", due_date="2026-10-13", priority="Low", title="Конспект")
+        self.check("Жоба бүрсігүні", due_date="2026-10-14", title="Жоба")
+        self.check("Емтихан 5 күннен кейін #математика", due_date="2026-10-17", course="математика", title="Емтихан")
+        self.check("Сабақ дс", due_date="2026-10-12", title="Сабақ")
+        self.check("Қазақ әдебиеті жс !орташа", title="Қазақ әдебиеті", due_date="2026-10-18", priority="Medium")
+
     def test_only_first_of_each_kind_is_used(self):
         self.check("Сдать завтра или пт #a #b", due_date="2026-10-13", course="a", title="Сдать или пт #b")
 

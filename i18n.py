@@ -1,6 +1,8 @@
 """Small, explicit RU/EN catalog. Task data and database enum values stay unchanged."""
 from flask import g, has_request_context
 
+from i18n_kk import KK
+
 RU = {
     "StudyFlow dashboard": "Главная StudyFlow",
     "Workspace navigation": "Навигация",
@@ -234,6 +236,20 @@ RU.update({
     "Download calendar (.ics)": "Скачать календарь (.ics)",
     "Export tasks (JSON)": "Экспорт задач (JSON)",
     "Dark theme": "Тёмная тема",
+    "Choose a supported language.": "Выберите поддерживаемый язык.",
+    "Undo": "Отменить",
+    "Nothing to undo.": "Отменять нечего.",
+    "Task marked as done.": "Задача выполнена.",
+    "Change undone.": "Изменение отменено.",
+    "What's new": "Что нового",
+    "Got it": "Понятно",
+    "Install app": "Установить приложение",
+    "Type a task in one line — the date, #course and !priority are recognised.": "Пишите задачу одной строкой — дата, #предмет и !приоритет распознаются сами.",
+    "On a phone, swipe a task right to finish it or left to move it to tomorrow.": "На телефоне смахните задачу вправо — она выполнена, влево — перенесётся на завтра.",
+    "Tap ⋯ on a task for the focus timer, moving it to tomorrow or editing.": "Нажмите ⋯ у задачи: фокус-таймер, перенос на завтра, изменение.",
+    "Made a mistake? Every tick and move can be undone for a few seconds.": "Ошиблись? Любую отметку и перенос можно отменить в течение нескольких секунд.",
+    "Progress lets you send your deadlines to Google or Apple Calendar.": "В разделе «Прогресс» сроки можно отправить в Google или Apple Календарь.",
+    "Swipe right: done. Swipe left: tomorrow.": "Вправо — готово. Влево — на завтра.",
     "Actions for {title}": "Действия с задачей «{title}»",
     "Actions": "Действия",
     "Move to tomorrow": "Перенести на завтра",
@@ -310,10 +326,16 @@ def current_language():
     return getattr(g, "language", "en") if has_request_context() else "en"
 
 def t(message, **values):
-    translated = RU.get(message, message) if current_language() == "ru" else message
+    language = current_language()
+    if language == "kk":
+        translated = KK.get(message) or RU.get(message, message)
+    else:
+        translated = RU.get(message, message) if language == "ru" else message
     return translated.format(**values) if values else translated
 
 def task_count(number):
+    if current_language() == "kk":
+        return f"{number} тапсырма"  # Kazakh nouns do not change after numerals.
     if current_language() != "ru":
         return f"{number} task" + ("" if number == 1 else "s")
     if 11 <= number % 100 <= 14:

@@ -1,6 +1,6 @@
 // StudyFlow 2.0: quick-add preview, keyboard shortcuts, long dates and the focus timer.
 (() => {
-  const lang = document.documentElement.lang === 'ru' ? 'ru-RU' : 'en-GB';
+  const lang = ({ ru: 'ru-RU', kk: 'kk-KZ' })[document.documentElement.lang] || 'en-GB';
   const motionOk = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // "Monday, 13 October" in the Today header.
@@ -52,14 +52,86 @@
     const tag = event.target.tagName;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || event.target.isContentEditable) return;
     if (document.querySelector('.modal.show, dialog[open]')) return;
-    if (event.key === '/' && quickInput) { event.preventDefault(); quickInput.focus(); }
-    if (event.key === 'n') { const opener = document.querySelector('[data-open-modal]'); if (opener) { event.preventDefault(); opener.click(); } }
+    // event.code keeps the shortcuts working on Russian and Kazakh keyboard layouts.
+    if (event.code === 'Slash' && quickInput) { event.preventDefault(); quickInput.focus(); }
+    if (event.code === 'KeyN') { const opener = document.querySelector('[data-open-modal]'); if (opener) { event.preventDefault(); opener.click(); } }
   });
 
   // Installable app with an offline notice.
   if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') {
     navigator.serviceWorker?.register('/sw.js').catch(() => {});
   }
+
+  // "What's new" card: shown until dismissed once in this browser.
+  const whatsNew = document.querySelector('[data-whats-new]');
+  const seenKey = 'studyflow-whats-new-3';
+  let seen = false;
+  try { seen = localStorage.getItem(seenKey) === '1'; } catch { /* Storage blocked: show the card. */ }
+  const asked = new URLSearchParams(location.search).has('news');
+  if (whatsNew && (!seen || asked)) whatsNew.hidden = false;
+  if (asked) whatsNew?.scrollIntoView({ block: 'center' });
+  whatsNew?.querySelector('[data-whats-new-close]')?.addEventListener('click', () => {
+    try { localStorage.setItem(seenKey, '1'); } catch { /* The card simply returns next time. */ }
+    whatsNew.classList.add('is-leaving');
+    setTimeout(() => { whatsNew.hidden = true; }, motionOk ? 260 : 0);
+  });
+
+  // Install button appears only where the browser supports installing.
+  let installPrompt;
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    installPrompt = event;
+    document.querySelectorAll('[data-install]').forEach(button => { button.hidden = false; });
+  });
+  document.querySelectorAll('[data-install]').forEach(button => button.addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    installPrompt = null;
+    document.querySelectorAll('[data-install]').forEach(other => { other.hidden = true; });
+  }));
+
+  // Undo toast leaves after a while; the change stays undoable until the next page.
+  const undoToast = document.querySelector('[data-undo-toast]');
+  if (undoToast) setTimeout(() => undoToast.classList.add('is-leaving'), 8000);
+
+  // Swipe a task on a touch screen: right = done, left = tomorrow.
+  document.querySelectorAll('.work-task').forEach(row => {
+    const doneForm = row.querySelector('.quick-done-form');
+    const snoozeForm = row.querySelector('form[action*="/snooze"]');
+    let startX = 0, startY = 0, dx = 0, tracking = false, decided = false;
+    row.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'touch' || event.target.closest('button, a, summary, select, input, .task-menu')) return;
+      startX = event.clientX; startY = event.clientY; dx = 0; tracking = true; decided = false;
+    });
+    row.addEventListener('pointermove', event => {
+      if (!tracking) return;
+      const moveX = event.clientX - startX, moveY = event.clientY - startY;
+      if (!decided) {
+        if (Math.abs(moveY) > 12 && Math.abs(moveY) > Math.abs(moveX)) { tracking = false; return; }
+        if (Math.abs(moveX) < 12) return;
+        decided = true;
+        row.classList.add('is-swiping');
+        row.setPointerCapture(event.pointerId);
+      }
+      dx = Math.max(-140, Math.min(140, moveX));
+      if (dx < 0 && !snoozeForm) dx = Math.max(dx, -24);
+      row.style.setProperty('--swipe', dx + 'px');
+      row.classList.toggle('swipe-done', dx > 90);
+      row.classList.toggle('swipe-later', dx < -90);
+    });
+    const finish = () => {
+      if (!tracking) return;
+      tracking = false;
+      row.classList.add('swipe-release');
+      if (dx > 90) doneForm.querySelector('button').click();
+      else if (dx < -90 && snoozeForm) HTMLFormElement.prototype.submit.call(snoozeForm);
+      row.style.setProperty('--swipe', '0px');
+      setTimeout(() => row.classList.remove('is-swiping', 'swipe-release', 'swipe-done', 'swipe-later'), 250);
+    };
+    row.addEventListener('pointerup', finish);
+    row.addEventListener('pointercancel', finish);
+  });
 
   // One open task menu at a time; Escape or a tap outside closes it.
   const menus = document.querySelectorAll('.task-more');

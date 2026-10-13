@@ -1,12 +1,12 @@
 """Turn one line such as "Эссе пт 18:00 !высокий #философия" into task fields.
 
-Recognised tokens (Russian or English), anywhere in the line:
+Recognised tokens (Russian, Kazakh or English), anywhere in the line:
   #course          course name; underscores become spaces ("#data_bases")
-  !high / !высокий / !1, !medium / !средний / !2, !low / !низкий / !3, or !!! / !! / !
-  today, tomorrow, сегодня, завтра, послезавтра
+  !high / !высокий / !жоғары / !1, !medium / !средний / !орташа / !2, !low / !низкий / !төмен / !3, or !!! / !! / !
+  today, tomorrow, сегодня, завтра, послезавтра, бүгін, ертең, бүрсігүні
   weekday names or short forms (пн … вс, mon … sun, "в пятницу")
   dd.mm, dd.mm.yyyy, yyyy-mm-dd
-  "через 3 дня", "in 3 days"
+  "через 3 дня", "in 3 days", "3 күннен кейін"
   hh:mm            kept in the notes, since tasks have a date and no time
 Everything else is the title.
 """
@@ -16,30 +16,30 @@ import re
 from datetime import date, timedelta
 
 PRIORITIES = {
-    "high": "High", "высокий": "High", "срочно": "High", "1": "High", "!!": "High",
-    "medium": "Medium", "средний": "Medium", "2": "Medium", "!": "Medium",
-    "low": "Low", "низкий": "Low", "3": "Low", "": "Low",
+    "high": "High", "высокий": "High", "срочно": "High", "жоғары": "High", "шұғыл": "High", "1": "High", "!!": "High",
+    "medium": "Medium", "средний": "Medium", "орташа": "Medium", "2": "Medium", "!": "Medium",
+    "low": "Low", "низкий": "Low", "төмен": "Low", "3": "Low", "": "Low",
 }
 WEEKDAYS = {
-    0: ("пн", "понедельник", "mon", "monday"),
-    1: ("вт", "вторник", "tue", "tuesday"),
-    2: ("ср", "среда", "среду", "wed", "wednesday"),
-    3: ("чт", "четверг", "thu", "thursday"),
-    4: ("пт", "пятница", "пятницу", "fri", "friday"),
-    5: ("сб", "суббота", "субботу", "sat", "saturday"),
-    6: ("вс", "воскресенье", "sun", "sunday"),
+    0: ("пн", "понедельник", "mon", "monday", "дс", "дүйсенбі"),
+    1: ("вт", "вторник", "tue", "tuesday", "сс", "сейсенбі"),
+    2: ("ср", "среда", "среду", "wed", "wednesday", "сәрсенбі"),
+    3: ("чт", "четверг", "thu", "thursday", "бс", "бейсенбі"),
+    4: ("пт", "пятница", "пятницу", "fri", "friday", "жм", "жұма"),
+    5: ("сб", "суббота", "субботу", "sat", "saturday", "сенбі"),
+    6: ("вс", "воскресенье", "sun", "sunday", "жс", "жексенбі"),
 }
 WEEKDAY_WORDS = {word: day for day, words in WEEKDAYS.items() for word in words}
-RELATIVE = {"сегодня": 0, "today": 0, "завтра": 1, "tomorrow": 1, "послезавтра": 2}
+RELATIVE = {"сегодня": 0, "today": 0, "бүгін": 0, "завтра": 1, "tomorrow": 1, "ертең": 1, "послезавтра": 2, "бүрсігүні": 2}
 
 TOKEN = re.compile(
     r"(?P<course>#[\w-]+)"
-    r"|(?<!\S)(?P<priority>!(?:!{0,2}|[A-Za-zА-Яа-яЁё]+|[123]))(?=\s|$)"
-    r"|(?P<in_days>(?:через|in)\s+(?P<n>\d{1,3})\s+(?:дн[еяй]+|день|days?))"
+    r"|(?<!\S)(?P<priority>!(?:!{0,2}|[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]+|[123]))(?=\s|$)"
+    r"|(?P<in_days>(?:(?:через|in)\s+(?P<n>\d{1,3})\s+(?:дн[еяй]+|день|days?))|(?:(?P<kk_n>\d{1,3})\s+күннен\s+кейін))"
     r"|(?P<iso>\d{4}-\d{2}-\d{2})"
     r"|(?P<dotted>\d{1,2}\.\d{1,2}(?:\.\d{2,4})?)"
     r"|(?P<time>\b\d{1,2}:\d{2}\b)"
-    r"|(?P<word>(?:в\s+|во\s+|on\s+)?[A-Za-zА-Яа-яЁё]+)",
+    r"|(?P<word>(?:в\s+|во\s+|on\s+)?[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]+)",
     re.IGNORECASE,
 )
 
@@ -72,7 +72,7 @@ def parse(text: str, today: date, default_course: str) -> dict:
         keep.append(text[position:match.start()])
         position = match.end()
         raw = match.group(0)
-        kind = match.lastgroup if match.lastgroup != "n" else "in_days"
+        kind = match.lastgroup if match.lastgroup not in ("n", "kk_n") else "in_days"
         if match.group("course") and course is None:
             course = match.group("course")[1:].replace("_", " ")
             continue
@@ -84,7 +84,7 @@ def parse(text: str, today: date, default_course: str) -> dict:
         if due is None:
             candidate = None
             if match.group("in_days"):
-                candidate = today + timedelta(days=int(match.group("n")))
+                candidate = today + timedelta(days=int(match.group("n") or match.group("kk_n")))
             elif match.group("iso"):
                 try:
                     candidate = date.fromisoformat(match.group("iso"))

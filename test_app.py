@@ -426,6 +426,47 @@ class StudyFlowTests(unittest.TestCase):
         self.assertIn("/static/offline.html", response.get_data(as_text=True))
         response.close()
 
+    def test_undo_restores_status_and_date_once(self):
+        self.create(title="Undo me", due_date=date.today().isoformat())
+        task_id = self.tasks()[0]["id"]
+        self.post(f"/tasks/{task_id}/status", status="Done")
+        page = self.client.get("/").data
+        self.assertIn(f'action="/tasks/{task_id}/undo'.encode(), page)
+        self.assertIn(b"Task marked as done.", page)
+        self.post(f"/tasks/{task_id}/undo")
+        self.assertEqual(self.tasks()[0]["status"], "To do")
+        self.post(f"/tasks/{task_id}/undo")  # Single use.
+        self.assertIn(b"Nothing to undo.", self.client.get("/").data)
+        self.post(f"/tasks/{task_id}/snooze")
+        self.client.get("/")
+        self.post(f"/tasks/{task_id}/undo")
+        self.assertEqual(self.tasks()[0]["due_date"], date.today().isoformat())
+        self.create(title="Other")
+        other = next(task["id"] for task in self.tasks() if task["title"] == "Other")
+        self.post(f"/tasks/{task_id}/status", status="Done")
+        self.client.get("/")
+        self.post(f"/tasks/{other}/undo")  # The pending undo belongs to another task.
+        self.assertEqual(next(task["status"] for task in self.tasks() if task["id"] == task_id), "Done")
+
+    def test_kazakh_interface_and_quick_add(self):
+        response = self.post("/language", language="kk", return_to="/")
+        self.assertIn("studyflow_language=kk", response.headers["Set-Cookie"])
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn('<html lang="kk">', page)
+        self.assertIn("Тапсырма", page)
+        self.assertIn('value="kk" lang="kk"', page)
+        self.post("/tasks/quick", text="Жоба ертең !жоғары")
+        task = self.tasks()[0]
+        self.assertEqual((task["title"], task["course"], task["priority"]), ("Жоба", "Жалпы", "High"))
+        self.assertEqual(self.post("/language", language="de").status_code, 400)
+        from flask import g
+        from i18n import t, task_count
+        with app.test_request_context():
+            g.language = "kk"
+            self.assertEqual(task_count(5), "5 тапсырма")
+            self.assertEqual(t("Next seven days"), "Алдағы жеті күн")
+            self.assertEqual(t("Only in Russian catalog") , "Only in Russian catalog")
+
     def test_json_export_contains_all_tasks(self):
         import json
         self.create(title="Отчёт по физике")
