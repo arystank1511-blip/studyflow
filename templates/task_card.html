@@ -1,26 +1,32 @@
 {% macro task_card(task, page, filters, today) %}
-<article class="work-task priority-{{ task.priority|lower }} {{ 'is-done' if task.status == 'Done' }}">
+{% set done = task.status == 'Done' %}
+{% set late = not done and task.due_date < today %}
+<article class="work-task priority-{{ task.priority|lower }} {{ 'is-done' if done }} {{ 'is-late' if late }}" style="--course: {{ course_color(task.course) }}">
+  <form class="quick-done-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
+    <input type="hidden" name="status" value="{{ 'To do' if done else 'Done' }}">
+    <button class="quick-done {{ 'is-checked' if done }}" type="submit" aria-pressed="{{ 'true' if done else 'false' }}" aria-label="{{ t('Reopen {title}', title=task.title) if done else t('Mark {title} as done', title=task.title) }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="sr-only">{{ t('Reopen') if done else t('Mark done') }}</span></button>
+  </form>
   <div class="work-task-content">
-    <div class="work-task-heading"><h3>{{ task.title }}</h3><span class="priority {{ task.priority|lower }}">{{ t(task.priority) }}</span></div>
-    <div class="work-task-details"><span class="course" style="--course: {{ course_color(task.course) }}">{{ task.course }}</span><span class="due {{ 'late' if task.status != 'Done' and task.due_date < today }}">{% if task.status != 'Done' and task.due_date < today %}{{ t("Overdue") }} · {% else %}{{ t("Due") }} {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span></div>
+    <div class="work-task-heading"><h3>{{ task.title }}</h3>{% if task.priority == 'High' %}<span class="priority high">{{ t('High') }}</span>{% elif task.status == 'In progress' and not done %}<span class="priority in-progress">{{ t('In progress') }}</span>{% endif %}</div>
+    <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if late }}">{% if late %}{{ t("Overdue") }}, {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span>{% if task.priority != 'High' %}<span class="sr-only">{{ t('{priority} priority', priority=t(task.priority)) }}</span>{% endif %}</div>
     {% if task.notes %}<details class="task-notes"><summary>{{ t("Notes") }}</summary><p>{{ task.notes }}</p></details>{% endif %}
   </div>
-  <div class="work-task-actions">
-    <form class="quick-done-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
-      {% set done = task.status == 'Done' %}
-      <input type="hidden" name="status" value="{{ 'To do' if done else 'Done' }}">
-      <button class="quick-done {{ 'is-checked' if done }}" type="submit" aria-pressed="{{ 'true' if done else 'false' }}" aria-label="{{ t('Reopen {title}', title=task.title) if done else t('Mark {title} as done', title=task.title) }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>{{ t('Reopen') if done else t('Mark done') }}</span></button>
-    </form>
-    <form class="task-status-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
-      <label class="sr-only" for="status-{{ task.id }}">{{ t('Status for {title}', title=task.title) }}</label>
-      <select id="status-{{ task.id }}" name="status">{% for option in ['To do', 'In progress', 'Done'] %}<option value="{{ option }}" {{ 'selected' if task.status == option }}>{{ t(option) }}</option>{% endfor %}</select>
-      <button class="status-save" type="submit" aria-label="{{ t('Save status for {title}', title=task.title) }}">{{ t('Save') }}</button>
-    </form>
-    {% if task.status != 'Done' %}<a class="focus-link" href="{{ url_for('focus', task=task.id) }}" aria-label="{{ t('Focus on {title}', title=task.title) }}" title="{{ t('Start focus') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 9v4l3 2 M9 2h6"/></svg></a>{% endif %}
-    <a class="edit-link" aria-label="{{ t('Edit {title}', title=task.title) }}" href="{{ url_for('edit_task', task_id=task.id, next=page, **filters) }}">{{ t("Edit") }}</a>
-    <form method="post" action="{{ url_for('delete_task', task_id=task.id, **filters) }}" data-confirm="{{ t('Delete this task?') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button class="delete" aria-label="{{ t('Delete {title}', title=task.title) }}" title="{{ t('Delete {title}', title=task.title) }}" type="submit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></form>
-  </div>
+  <details class="task-more">
+    <summary aria-label="{{ t('Actions for {title}', title=task.title) }}" title="{{ t('Actions') }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>
+    <div class="task-menu">
+      <form class="task-status-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
+        <label for="status-{{ task.id }}">{{ t('Status') }}</label>
+        <span class="status-row"><select id="status-{{ task.id }}" name="status">{% for option in ['To do', 'In progress', 'Done'] %}<option value="{{ option }}" {{ 'selected' if task.status == option }}>{{ t(option) }}</option>{% endfor %}</select><button class="status-save" type="submit" aria-label="{{ t('Save status for {title}', title=task.title) }}">{{ t('Save') }}</button></span>
+      </form>
+      {% if not done %}
+      <a class="menu-item focus-link" href="{{ url_for('focus', task=task.id) }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 9v4l3 2 M9 2h6"/></svg>{{ t('Start focus') }}</a>
+      <form method="post" action="{{ url_for('snooze_task', task_id=task.id, **filters) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button class="menu-item" type="submit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h12 M13 6l6 6-6 6"/></svg>{{ t('Move to tomorrow') }}</button></form>
+      {% endif %}
+      <a class="menu-item edit-link" aria-label="{{ t('Edit {title}', title=task.title) }}" href="{{ url_for('edit_task', task_id=task.id, next=page, **filters) }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M14 6l4 4"/></svg>{{ t("Edit") }}</a>
+      <form method="post" action="{{ url_for('delete_task', task_id=task.id, **filters) }}" data-confirm="{{ t('Delete this task?') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button class="menu-item delete" aria-label="{{ t('Delete {title}', title=task.title) }}" type="submit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>{{ t('Delete') }}</button></form>
+    </div>
+  </details>
 </article>
 {% endmacro %}
