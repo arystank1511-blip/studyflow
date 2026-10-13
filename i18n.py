@@ -236,6 +236,8 @@ RU.update({
     "Download calendar (.ics)": "Скачать календарь (.ics)",
     "Export tasks (JSON)": "Экспорт задач (JSON)",
     "Dark theme": "Тёмная тема",
+    "Settings": "Настройки",
+    "Made by {name}": "Автор: {name}",
     "Timetable": "Расписание",
     "Study": "Учёба",
     "Timetable from a photo": "Расписание по фото",

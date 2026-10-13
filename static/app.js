@@ -115,13 +115,13 @@ try {
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Theme toggle: explicit choice wins over the system preference.
-const themeToggle = document.querySelector('[data-theme-toggle]');
+const themeToggles = document.querySelectorAll('[data-theme-toggle]');
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const isDark = () => (document.documentElement.dataset.theme ?? (darkQuery.matches ? 'dark' : 'light')) === 'dark';
-const syncThemeButton = () => themeToggle?.setAttribute('aria-pressed', String(isDark()));
+const syncThemeButton = () => themeToggles.forEach(button => button.setAttribute('aria-pressed', String(isDark())));
 syncThemeButton();
 darkQuery.addEventListener('change', syncThemeButton);
-themeToggle?.addEventListener('click', () => {
+themeToggles.forEach(button => button.addEventListener('click', () => {
   const next = isDark() ? 'light' : 'dark';
   const apply = () => {
     document.documentElement.dataset.theme = next;
@@ -130,7 +130,7 @@ themeToggle?.addEventListener('click', () => {
   };
   try { localStorage.setItem('studyflow-theme', next); } catch { /* Choice lasts for this page only. */ }
   if (document.startViewTransition && !reduceMotion) quietTransition(document.startViewTransition(apply)); else apply();
-});
+}));
 
 // A skipped or timed-out transition is harmless; keep it out of the console.
 function quietTransition(transition) {
