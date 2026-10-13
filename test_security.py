@@ -1,6 +1,7 @@
 """Offline security regression tests. Real Supabase RLS needs the separate SQL test."""
 import base64
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -53,6 +54,30 @@ class CloudSecurityTests(unittest.TestCase):
                          "due_date": "2026-12-31", "priority": "Medium", "status": "To do", "notes": "<script>alert(1)</script>"}]
             return []
         raise AssertionError((method, path))
+
+    def test_confirmed_token_is_not_rechecked_on_every_page(self):
+        def token(exp):
+            payload = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+            return "h." + payload + ".s"
+        fresh = token(int(time.time()) + 3600)
+        user = {"id": ALICE, "email": "student@example.com", "email_confirmed_at": "now"}
+        self.client.set_cookie("sf_access", fresh)
+        with patch("cloud.api", return_value=user) as remote, patch("app.cloud_tasks", return_value=[]):
+            self.client.get("/focus")
+            self.client.get("/focus")
+            self.assertEqual([c.args for c in remote.call_args_list], [("GET", "/auth/v1/user")])
+            # A different token is never served from the remembered check.
+            self.client.set_cookie("sf_access", token(int(time.time()) + 3601))
+            self.client.get("/focus")
+            self.assertEqual(remote.call_count, 2)
+            # After the recheck interval Supabase is asked again.
+            with patch("cloud.time.time", return_value=time.time() + 301):
+                self.client.get("/focus")
+            self.assertEqual(remote.call_count, 3)
+        # A token about to expire is not trusted from memory; it goes to Supabase (and refresh) instead.
+        self.client.set_cookie("sf_access", token(int(time.time()) + 30))
+        with patch("cloud.api", side_effect=CloudError(401)):
+            self.assertEqual(self.client.get("/focus").location, "/login")
 
     def test_anonymous_cannot_read_or_write(self):
         with patch("cloud.api") as remote:

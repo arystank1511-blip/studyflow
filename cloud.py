@@ -77,12 +77,50 @@ def authenticated_user(token):
     return {"id": user["id"], "email": user.get("email", "")}
 
 
+# How long a confirmed access token is trusted without asking Supabase again. Every database
+# request still sends the token to Supabase, which checks its signature and expiry under RLS.
+RECHECK_SECONDS = 300
+
+
+def token_digest(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def token_expiry(token):
+    """The exp claim of a token Supabase has already accepted; 0 when it cannot be read."""
+    try:
+        payload = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        return int(claims["exp"])
+    except (IndexError, KeyError, TypeError, ValueError, UnicodeDecodeError):
+        return 0
+
+
+def remember_user(token, user):
+    expires = token_expiry(token)
+    if expires:
+        # The Flask session is signed, so a visitor cannot plant a user here.
+        session["auth_check"] = {"token": token_digest(token), "user": user, "at": int(time.time()), "exp": expires}
+
+
+def remembered_user(token):
+    entry = session.get("auth_check")
+    now = time.time()
+    if (not isinstance(entry, dict) or not isinstance(entry.get("user"), dict)
+            or not secrets.compare_digest(str(entry.get("token", "")), token_digest(token))):
+        return None
+    if now - entry.get("at", 0) >= RECHECK_SECONDS or entry.get("exp", 0) - now < 60:
+        return None  # Re-check, or refresh shortly before the token expires.
+    return entry["user"]
+
+
 def accept_tokens(result):
     if not isinstance(result, dict) or not result.get("access_token") or not result.get("refresh_token"):
         raise CloudError(401)
     g.access_token = result["access_token"]
     g.user = authenticated_user(g.access_token)
     g.new_tokens = (result["access_token"], result["refresh_token"])
+    remember_user(g.access_token, g.user)
 
 
 def load_identity():
@@ -104,7 +142,10 @@ def load_identity():
     try:
         if not token:
             raise CloudError(401)
-        g.user = authenticated_user(token)
+        g.user = remembered_user(token)
+        if g.user is None:
+            g.user = authenticated_user(token)
+            remember_user(token, g.user)
         g.access_token = token
     except CloudError as error:
         if error.status not in (400, 401, 403):
@@ -203,6 +244,7 @@ def register_auth(app):
         accept_tokens(result)  # Missing or unverified session => CloudError, fail closed.
         session.clear()
         session["csrf_token"] = secrets.token_hex(32)
+        remember_user(g.access_token, g.user)
         flash("You are signed in.", "success")
         return redirect(url_for("index"))
 
