@@ -19,6 +19,7 @@
   <a class="skip-link" href="#main-content">{{ t("Skip to tasks") }}</a>
   {% block content %}{% endblock %}
   <script id="ui-strings" type="application/json">{{ {'saving': t('Saving…'), 'create': t('Create task'), 'save': t('Save changes')}|tojson }}</script>
+  <script src="{{ url_for('static', filename='dates.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
   <script src="{{ url_for('static', filename='app-v2.js') }}"></script>
 </body>

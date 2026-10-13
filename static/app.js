@@ -65,7 +65,7 @@ document.querySelectorAll('time[datetime]').forEach(element => {
   const value = element.getAttribute('datetime');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
   const parsed = new Date(value + 'T12:00:00');
-  if (!Number.isNaN(parsed.getTime())) element.textContent = new Intl.DateTimeFormat(locale, {year:'numeric', month:'short', day:'numeric'}).format(parsed);
+  if (!Number.isNaN(parsed.getTime())) element.textContent = (window.formatStudyDate || (value => value.toLocaleDateString(locale)))(parsed, 'date');
 });
 if (modal?.dataset.reopen) openModal();
 

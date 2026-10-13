@@ -193,7 +193,7 @@ label > span { font-weight: 400; color: var(--text-3); }
   content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--margin-x) - 12px); width: 1.5px;
   background: color-mix(in srgb, var(--pen-red) 55%, transparent);
 }
-.workspace-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.workspace-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 6px; }
 .workspace-head > div, .workspace-head h2 { min-width: 0; }
 .workspace-head .text-button { flex-shrink: 0; padding: 0 8px; }
 .workspace-head h2 { font-size: 20px; font-weight: 700; }

@@ -7,7 +7,8 @@
   document.querySelectorAll('time[data-format="long"]').forEach(element => {
     const parsed = new Date(element.getAttribute('datetime') + 'T12:00:00');
     if (Number.isNaN(parsed.getTime())) return;
-    const text = new Intl.DateTimeFormat(lang, { weekday: 'long', day: 'numeric', month: 'long' }).format(parsed);
+    if (!window.formatStudyDate) return;
+    const text = window.formatStudyDate(parsed, 'long');
     element.textContent = text.charAt(0).toUpperCase() + text.slice(1);
   });
 
@@ -35,7 +36,7 @@
         const response = await fetch(quick.dataset.previewUrl + '?text=' + encodeURIComponent(text), { headers: { Accept: 'application/json' } });
         if (!response.ok || current !== requestId) return;
         const data = await response.json();
-        const date = new Intl.DateTimeFormat(lang, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(data.due_date + 'T12:00:00'));
+        const date = window.formatStudyDate ? window.formatStudyDate(new Date(data.due_date + 'T12:00:00'), 'chip') : data.due_date;
         preview.replaceChildren(
           chip(date + (data.time ? ' · ' + data.time : ''), 'date'),
           chip(data.priority, data.priority_key.toLowerCase()),
