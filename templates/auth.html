@@ -14,6 +14,9 @@
   <label for="auth-email">{{ t('Email address') }}</label>
   <input id="auth-email" type="email" name="email" autocomplete="{{ autocomplete }}" maxlength="254" value="{{ email }}" placeholder="you@example.com" required>
 {% endmacro %}
+{% macro captcha() %}{% if captcha_key %}
+  <div class="cf-turnstile" data-sitekey="{{ captcha_key }}" data-theme="auto" data-language="{{ 'en' if lang == 'en' else 'ru' }}" data-size="flexible"></div>
+{% endif %}{% endmacro %}
 {% macro code_field() %}
   <label for="auth-code">{{ t('Code from the email') }}</label>
   <input id="auth-code" class="code-input" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,12}" maxlength="12" required aria-describedby="code-help{% if error %} auth-error{% endif %}">
@@ -57,6 +60,7 @@
             <label for="auth-password">{{ t('Password') }}</label>
             <input id="auth-password" type="password" name="password" autocomplete="current-password" maxlength="72" required{% if error %} aria-describedby="auth-error"{% endif %}>
           {% endif %}
+          {{ captcha() }}
           <button class="primary" type="submit">{{ t('Create account') if mode == 'register' else t('Sign in') }} <span aria-hidden="true">→</span></button>
         </form>
         {% if mode == 'login' %}<a class="auth-link" href="{{ url_for('forgot_password') }}">{{ t('Forgot your password?') }}</a>{% endif %}
@@ -65,7 +69,7 @@
       {% elif mode == 'code' %}
         <p>{{ t('Enter your email and we will send a one-time code. A new account is created automatically.') }}</p>
         <form method="post" class="auth-form" action="{{ url_for('login_code') }}">
-          {{ csrf() }}{{ email_field('email') }}
+          {{ csrf() }}{{ email_field('email') }}{{ captcha() }}
           <button class="primary" type="submit">{{ t('Send the code') }} <span aria-hidden="true">→</span></button>
         </form>
         <a class="auth-link" href="{{ url_for('login') }}">{{ t('Sign in with a password') }}</a>
@@ -75,16 +79,20 @@
           {{ csrf() }}{{ code_field() }}
           <button class="primary" type="submit">{{ t('Confirm and sign in') }} <span aria-hidden="true">→</span></button>
         </form>
+        {% if captcha_key %}
+        <a class="auth-link" href="{{ url_for('login_code') }}">{{ t('Send a new code') }}</a>
+        {% else %}
         <form method="post" class="auth-resend" action="{{ url_for('login_code') }}">
           {{ csrf() }}<input type="hidden" name="email" value="{{ email }}">
           <button class="auth-link" type="submit">{{ t('Send a new code') }}</button>
         </form>
+        {% endif %}
         <a class="auth-link" href="{{ url_for('login_code') }}">{{ t('Use another email') }}</a>
 
       {% elif mode == 'forgot' %}
         <p>{{ t('Enter the email you registered with. We will send a code to set a new password.') }}</p>
         <form method="post" class="auth-form" action="{{ url_for('forgot_password') }}">
-          {{ csrf() }}{{ email_field() }}
+          {{ csrf() }}{{ email_field() }}{{ captcha() }}
           <button class="primary" type="submit">{{ t('Send the code') }} <span aria-hidden="true">→</span></button>
         </form>
         <a class="auth-link" href="{{ url_for('login') }}">{{ t('Back to sign in') }}</a>
@@ -100,6 +108,7 @@
       {% endif %}
     {% endif %}
   </section>
+  {% if captcha_key and ready %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
   <p class="author-credit">{{ t('Made by {name}', name='Arystan' if lang == 'en' else 'Арыстан') }}</p>
 </main>
 {% endblock %}

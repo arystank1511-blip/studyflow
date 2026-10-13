@@ -184,6 +184,24 @@ class CloudSecurityTests(unittest.TestCase):
             self.assertEqual(self.client.get("/password/reset").location, "/password/forgot")
             remote.assert_not_called()
 
+    def test_turnstile_token_is_required_and_forwarded(self):
+        self.assertNotIn(b"challenges.cloudflare.com", self.client.get("/login").headers["Content-Security-Policy"].encode())
+        app.config["TURNSTILE_SITE_KEY"] = "0x4AAA-site"
+        response = self.client.get("/login")
+        self.assertIn(b'data-sitekey="0x4AAA-site"', response.data)
+        self.assertIn("https://challenges.cloudflare.com", response.headers["Content-Security-Policy"])
+        with patch("cloud.api") as remote:
+            for path, form in (("/login", {"password": "whatever-password"}), ("/login/code", {}),
+                               ("/password/forgot", {}),
+                               ("/register", {"password": "new-long-password!", "password_confirm": "new-long-password!"})):
+                response = self.post(path, email="student@example.com", **form)
+                self.assertEqual(response.status_code, 400, path)
+                self.assertIn(b"not a robot", response.data)
+            remote.assert_not_called()
+        with patch("cloud.api", return_value={}) as remote:
+            self.post("/login/code", email="student@example.com", **{"cf-turnstile-response": "tok"})
+            self.assertEqual(remote.call_args.kwargs["data"]["gotrue_meta_security"], {"captcha_token": "tok"})
+
     def test_email_code_sign_in(self):
         with patch("cloud.api", return_value={}) as remote:
             self.assertEqual(self.post("/login/code", email=" Student@Example.com ").location, "/login/verify")

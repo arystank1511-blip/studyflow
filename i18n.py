@@ -211,6 +211,7 @@ RU.update({
     "Enter a valid email address.": "Введите корректный адрес почты.",
     "Wait a minute before requesting another code.": "Подождите минуту перед повторной отправкой кода.",
     "Too many attempts. Please try again later.": "Слишком много попыток. Попробуйте позже.",
+    "Complete the check that you are not a robot.": "Пройдите проверку «я не робот».",
     "Could not send a code. Please try again later.": "Не удалось отправить код. Попробуйте позже.",
     "The code is invalid or expired. Request a new code.": "Код неверный или устарел. Запросите новый.",
     "Sign-in is temporarily unavailable. Please try again later.": "Вход временно недоступен. Попробуйте позже.",

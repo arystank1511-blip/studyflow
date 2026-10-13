@@ -50,6 +50,9 @@ app.config.update(
     SUPABASE_PUBLISHABLE_KEY=SUPABASE_KEY,
     # Turn on only after the Google provider and redirect URL are configured in Supabase.
     GOOGLE_LOGIN=os.environ.get("STUDYFLOW_GOOGLE_LOGIN") == "1",
+    # Cloudflare Turnstile site key (public). Set it only after captcha protection with the
+    # matching secret is on in Supabase, which then checks every token itself.
+    TURNSTILE_SITE_KEY=os.environ.get("TURNSTILE_SITE_KEY", "").strip(),
 )
 
 

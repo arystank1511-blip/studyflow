@@ -198,6 +198,7 @@ KK = {
     "Enter a valid email address.": "Электрондық поштаны дұрыс енгізіңіз.",
     "Wait a minute before requesting another code.": "Жаңа кодты бір минуттан кейін сұрай аласыз.",
     "Too many attempts. Please try again later.": "Тым көп әрекет жасалды. Сәл кейінірек қайталаңыз.",
+    "Complete the check that you are not a robot.": "«Мен робот емеспін» тексерісінен өтіңіз.",
     "Could not send a code. Please try again later.": "Код жіберілмеді. Сәл кейінірек қайталаңыз.",
     "The code is invalid or expired. Request a new code.": "Код қате немесе мерзімі өтіп кеткен. Жаңа код сұраңыз.",
     "Sign-in is temporarily unavailable. Please try again later.": "Кіру уақытша мүмкін емес. Сәл кейінірек қайталаңыз.",
