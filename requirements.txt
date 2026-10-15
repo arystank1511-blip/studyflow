@@ -3,3 +3,4 @@ httpx==0.28.1
 python-dotenv==1.2.2
 tzdata==2026.5
 anthropic==1.13.0
+sentry-sdk[flask]==2.70.0

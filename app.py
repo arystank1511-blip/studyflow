@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import Flask, Response, abort, send_from_directory, flash, g, has_request_context, redirect, render_template, request, session, url_for
 from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
+import monitoring
 import schedule_scan
 from dotenv import load_dotenv
 from cloud import (FeedStorageMissing, GroupsMissing, StudyStorageMissing, cloud_feed, cloud_sessions, cloud_tasks, feed_tasks,
@@ -25,6 +26,7 @@ from werkzeug.exceptions import SecurityError
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "studyflow.db"
 load_dotenv(BASE_DIR / ".env", override=False)
+monitoring.init()  # Error reports to Sentry only when SENTRY_DSN is set; private data is stripped.
 ON_VERCEL = os.environ.get("VERCEL") == "1"
 CLOUD_MODE = ON_VERCEL or os.environ.get("STUDYFLOW_MODE", "local") == "cloud"
 SECRET_KEY = os.environ.get("STUDYFLOW_SECRET_KEY", "")
