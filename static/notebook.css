@@ -738,6 +738,13 @@ label > span { font-weight: 400; color: var(--text-3); }
 .author-credit { margin: 4px 0 0; font: 700 22px/1.1 var(--hand); color: var(--ink); }
 .auth-shell > .author-credit { margin-top: 18px; text-align: center; }
 
+.delete-account { max-width: 560px; }
+.delete-account h1 { margin: 0 0 10px; font-size: 24px; }
+.delete-account p { color: var(--text-2); }
+.delete-form { display: grid; gap: 8px; margin-top: 18px; }
+.delete-form label { font-weight: 600; }
+.delete-account-link { color: var(--text-3); }
+
 /* Welcome page: one notebook spread. The copy sits on the left; the right page shows a real-looking day. */
 .welcome { max-width: 1080px; margin: 0 auto; padding: 20px 24px 40px; }
 .welcome-top { margin-bottom: 8px; }

@@ -57,6 +57,37 @@ class CloudSecurityTests(unittest.TestCase):
             return []
         raise AssertionError((method, path))
 
+    def test_account_deletion_needs_the_email_and_signs_out(self):
+        with patch("cloud.api") as remote:
+            self.assertEqual(self.client.get("/account/delete").location, "/login")
+            remote.assert_not_called()
+        self.sign_in()
+        calls = []
+        def provider(method, path, **kwargs):
+            if path == "/auth/v1/user":
+                return self.provider(method, path, **kwargs)
+            calls.append((method, path, kwargs.get("token")))
+            return None
+        with patch("cloud.api", side_effect=provider):
+            page = self.client.get("/account/delete")
+            self.assertIn(b"student@example.com", page.data)
+            self.assertEqual(self.post("/account/delete", email="someone@else.com").status_code, 400)
+            self.assertEqual(calls, [])
+            self.assertEqual(self.client.post("/account/delete", data={"email": "student@example.com"}).status_code, 400)  # CSRF.
+            with self.client.session_transaction() as state:
+                self.csrf = state["csrf_token"]
+            response = self.post("/account/delete", email=" Student@Example.com ")
+        self.assertEqual(calls, [("POST", "/rest/v1/rpc/studyflow_delete_account", "alice-token")])
+        self.assertEqual(response.location, "/login")
+        self.assertIn("sf_access=;", response.headers.get("Set-Cookie", "") + ";".join(response.headers.getlist("Set-Cookie")))
+        self.sign_in()
+        with patch("cloud.api", side_effect=lambda method, path, **kw: self.provider(method, path, **kw) if path == "/auth/v1/user" else (_ for _ in ()).throw(CloudError(404))):
+            with self.client.session_transaction() as state:
+                state["csrf_token"] = self.csrf
+            response = self.post("/account/delete", email="student@example.com")
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b"delete_account.sql", response.data)
+
     def test_welcome_page_and_robots_are_public(self):
         with patch("cloud.api") as remote:
             page = self.client.get("/welcome", headers={"Accept-Language": "ru"})

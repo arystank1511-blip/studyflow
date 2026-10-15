@@ -421,6 +421,31 @@ def register_auth(app):
             flash(message, "error")
             return redirect(url_for("login"))
 
+    @app.route("/account/delete", methods=["GET", "POST"])
+    def delete_account():
+        if not ready() or not g.get("user"):
+            abort(404)
+
+        def form(status=200, error=None):
+            return render_template("delete_account.html", page="account", error=error), status
+
+        if request.method == "GET":
+            return form()
+        typed = request.form.get("email", "").strip().lower()
+        if not typed or not secrets.compare_digest(typed.encode(), g.user["email"].strip().lower().encode()):
+            return form(400, "The email does not match. Nothing was deleted.")
+        try:
+            # Only the caller can be deleted: the function reads auth.uid() from this token.
+            api("POST", "/rest/v1/rpc/studyflow_delete_account", token=g.access_token, data={})
+        except CloudError as error:
+            if error.status == 404:
+                return form(503, "Account deletion is not connected yet: the site owner needs to run supabase/delete_account.sql in Supabase.")
+            abort(503)
+        session.clear()
+        g.clear_auth = True
+        flash("Your account and all its data were deleted.", "success")
+        return redirect(url_for("login"))
+
     @app.post("/logout")
     def logout():
         try:
