@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}StudyFlow · {{ t('Every deadline on one page.') }}{% endblock %}
+{% block content %}
+<main class="welcome" id="main-content">
+  <header class="auth-heading welcome-top">
+    <a class="brand" href="{{ url_for('welcome') }}"><img class="brand-symbol" src="{{ url_for('static', filename='brand-mark.svg') }}" width="36" height="36" alt=""><span class="brand-wordmark" translate="no">study<span>flow</span></span></a>
+    <div class="auth-heading-actions">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="{{ t('Dark theme') }}" title="{{ t('Dark theme') }}"><svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <form class="language-switch" method="post" action="{{ url_for('change_language') }}" aria-label="{{ t('Language') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="return_to" value="{{ request.path }}">
+        <button name="language" value="ru" lang="ru" aria-label="Русский" aria-pressed="{{ 'true' if lang == 'ru' else 'false' }}">RU</button><button name="language" value="kk" lang="kk" aria-label="Қазақша" aria-pressed="{{ 'true' if lang == 'kk' else 'false' }}">ҚАЗ</button><button name="language" value="en" lang="en" aria-label="English" aria-pressed="{{ 'true' if lang == 'en' else 'false' }}">EN</button>
+      </form>
+      <a class="text-button welcome-signin" href="{{ url_for('login') }}">{{ t('Sign in') }}</a>
+    </div>
+  </header>
+
+  <section class="welcome-hero" aria-labelledby="welcome-title">
+    <div class="welcome-copy">
+      <h1 id="welcome-title">{{ t('Every deadline on one page.') }}</h1>
+      <p class="welcome-lead">{{ t('StudyFlow is a free planner for students and pupils: tasks, exams and your timetable in one notebook, on your phone and computer.') }}</p>
+      <div class="welcome-cta">
+        <a class="primary" href="{{ url_for('register') }}">{{ t('Start for free') }}</a>
+        <a class="secondary" href="{{ url_for('login') }}">{{ t('Sign in') }}</a>
+      </div>
+      <p class="welcome-note">{{ t('In Russian, Kazakh and English. Install it on your phone like an app.') }}</p>
+    </div>
+
+    <figure class="welcome-page" aria-hidden="true">
+      <p class="welcome-page-date"><time datetime="{{ today }}" data-format="long">{{ today }}</time></p>
+      <ul class="mock-list">
+        <li class="mock-task is-done" style="--course: {{ course_color(t('Physics')) }}"><span class="mock-check"></span><span><strong>{{ t('Physics lab report') }}</strong><small>{{ t('Physics') }}</small></span></li>
+        <li class="mock-task" style="--course: {{ course_color(t('Philosophy')) }}"><span class="mock-check"></span><span><strong>{{ t('Philosophy essay') }}</strong><small>{{ t('Philosophy') }}</small></span><em class="mock-flag high">!</em></li>
+        <li class="mock-task" style="--course: {{ course_color(t('Calculus')) }}"><span class="mock-check"></span><span><strong>{{ t('Calculus exam') }}</strong><small>{{ t('Calculus') }}</small></span><em class="mock-flag">D-5</em></li>
+      </ul>
+      <p class="welcome-scribble">{{ t('1 of 3 done today') }}</p>
+    </figure>
+  </section>
+
+  <section class="welcome-features" aria-labelledby="features-title">
+    <h2 id="features-title" class="sr-only">{{ t('What StudyFlow does') }}</h2>
+    <ul>
+      <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><h3>{{ t('Write it like a note') }}</h3><p>{{ t('Type “essay fri !high #philosophy”, and StudyFlow finds the date, course and priority.') }}</p></li>
+      <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z M9 13a3 3 0 1 0 6 0a3 3 0 1 0-6 0"/></svg><h3>{{ t('Timetable from a photo') }}</h3><p>{{ t('Photograph your timetable and the classes become tasks for the coming weeks.') }}</p></li>
+      <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M12 9v4l3 2 M9 2h6"/></svg><h3>{{ t('Exam countdown and study timer') }}</h3><p>{{ t('See how many days are left before each exam and how many hours you studied each subject.') }}</p></li>
+      <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M8 2v4 M16 2v4 M3 9h18"/></svg><h3>{{ t('Reminders in your calendar') }}</h3><p>{{ t('Deadlines appear in Google or Apple Calendar with a reminder the day before.') }}</p></li>
+    </ul>
+  </section>
+
+  <section class="welcome-end" aria-labelledby="welcome-end-title">
+    <h2 id="welcome-end-title">{{ t('Free and without ads. Only you can see your tasks.') }}</h2>
+    <a class="primary" href="{{ url_for('register') }}">{{ t('Start for free') }}</a>
+  </section>
+  <p class="author-credit">{{ t('Made by {name}', name='Arystan' if lang == 'en' else 'Арыстан') }}</p>
+</main>
+{% endblock %}
