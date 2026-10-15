@@ -1,0 +1,16 @@
+{% extends 'layout.html' %}
+{% block title %}{{ t('Delete account') }} · StudyFlow{% endblock %}
+{% block dashboard_content %}
+<section class="workspace-board delete-account" aria-labelledby="delete-title">
+  <h1 id="delete-title">{{ t('Delete account') }}</h1>
+  <p>{{ t('This deletes your account, all tasks, study time and the calendar link. It cannot be undone.') }}</p>
+  <p><a class="edit-link" href="{{ url_for('data_export') }}" download>{{ t('Download a copy of your tasks first') }}</a></p>
+  {% if error %}<p class="flash error" id="delete-error" role="alert">{{ t(error) }}</p>{% endif %}
+  <form method="post" action="{{ url_for('delete_account') }}" class="delete-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="delete-email">{{ t('To confirm, type your email: {email}', email=g.user.email) }}</label>
+    <input id="delete-email" type="email" name="email" autocomplete="off" maxlength="254" required{% if error %} aria-invalid="true" aria-describedby="delete-error"{% endif %}>
+    <div class="edit-footer"><button class="danger-action" type="submit">{{ t('Delete account forever') }}</button><a class="edit-link" href="{{ url_for('index') }}">{{ t('Cancel') }}</a></div>
+  </form>
+</section>
+{% endblock %}
