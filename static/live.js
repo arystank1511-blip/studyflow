@@ -2,7 +2,7 @@
 // redirects to is fetched in the background and only the regions marked data-live are swapped.
 (() => {
   window.StudyFlow = window.StudyFlow || { enhancers: [] };
-  const actions = /^\/tasks\/(\d+\/(status|snooze|undo|delete)|reschedule-overdue)$/;
+  const actions = /^\/tasks\/(\d+\/(status|snooze|undo|delete|steps\/\d+)|reschedule-overdue)$/;
   let queue = Promise.resolve();
 
   const handles = form => form.method.toLowerCase() === 'post'

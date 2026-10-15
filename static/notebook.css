@@ -256,6 +256,20 @@ label > span { font-weight: 400; color: var(--text-3); }
 .work-task.is-done h3 { color: var(--text-3); text-decoration: line-through; text-decoration-color: var(--ink); text-decoration-thickness: 2px; }
 .work-task.is-done .work-task-details { opacity: .75; }
 .work-task.is-pending { opacity: .55; pointer-events: none; transition: opacity .2s ease; }
+.task-repeat { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.more-fields { border-top: 1px dashed var(--rule-strong); padding-top: 10px; }
+.more-fields > summary { cursor: pointer; font-weight: 600; color: var(--ink); min-height: 32px; }
+.more-fields[open] { display: grid; gap: 12px; }
+.task-steps { margin-top: 8px; }
+.task-steps > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.task-steps > summary span { margin-left: 4px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.task-steps ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
+.task-steps form { margin: 0; }
+.step-toggle { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 4px 6px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.step-toggle:hover { background: var(--ink-soft); }
+.step-box { width: 18px; height: 18px; flex-shrink: 0; border: 2px solid var(--check-border); border-radius: 5px; }
+.step-toggle.is-done .step-box { border-color: var(--ink); background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.step-toggle.is-done .step-text { color: var(--text-3); text-decoration: line-through; }
 .task-notes { margin-top: 6px; font-size: 14px; color: var(--text-2); }
 .task-notes summary { width: max-content; min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--text-3); font-size: 13px; }
 .task-notes p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

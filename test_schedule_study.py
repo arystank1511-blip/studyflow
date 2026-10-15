@@ -172,6 +172,56 @@ class ScheduleAndStudyTests(unittest.TestCase):
         self.post(f"/tasks/{task_id}/edit", title="Анатомия", course="Био", due_date=soon, priority="Medium", exam_field="1")
         self.assertEqual(next(row["is_exam"] for row in self.tasks() if row["id"] == task_id), 0)
 
+    # ---------- checklists and repeating tasks ----------
+    def test_checklist_keeps_ticks_and_validates(self):
+        due = date.today().isoformat()
+        self.post("/tasks", title="Курсовая", course="Право", due_date=due, steps_field="1", repeat="", steps="План\nВведение\n\nГлава 1")
+        task = self.tasks()[0]
+        self.assertEqual([step["text"] for step in json.loads(task["steps"])], ["План", "Введение", "Глава 1"])
+        self.post(f"/tasks/{task['id']}/steps/1")
+        self.assertEqual([step["done"] for step in json.loads(self.tasks()[0]["steps"])], [False, True, False])
+        self.assertEqual(self.post(f"/tasks/{task['id']}/steps/7").status_code, 404)
+        # Editing keeps the tick of a step whose text did not change.
+        self.post(f"/tasks/{task['id']}/edit", title="Курсовая", course="Право", due_date=due, priority="Medium",
+                  steps_field="1", repeat="", steps="Введение\nГлава 2")
+        self.assertEqual(json.loads(self.tasks()[0]["steps"]), [{"text": "Введение", "done": True}, {"text": "Глава 2", "done": False}])
+        response = self.post(f"/tasks/{task['id']}/edit", title="Курсовая", course="Право", due_date=due, priority="Medium",
+                             steps_field="1", repeat="", steps="\n".join(["шаг"] * 21))
+        self.assertEqual(response.status_code, 400)
+        page = self.client.get("/?view=all").get_data(as_text=True)
+        self.assertIn("1/2", page)
+        self.assertIn("step-toggle is-done", page)
+        # A form without the checklist fields (quick add, older pages) leaves them alone.
+        self.post(f"/tasks/{task['id']}/edit", title="Курсовая!", course="Право", due_date=due, priority="Medium")
+        self.assertEqual(len(json.loads(self.tasks()[0]["steps"])), 2)
+
+    def test_repeating_task_moves_on_and_undo_takes_it_back(self):
+        due = "2026-01-31"
+        self.post("/tasks", title="Отчёт", course="Работа", due_date=due, steps_field="1", repeat="monthly", steps="Собрать данные")
+        task = self.tasks()[0]
+        self.post(f"/tasks/{task['id']}/steps/0")
+        self.post(f"/tasks/{task['id']}/status", status="Done")
+        rows = self.tasks()
+        self.assertEqual([(row["due_date"], row["status"], row["repeat"]) for row in rows],
+                         [("2026-01-31", "Done", ""), ("2026-02-28", "To do", "monthly")])
+        self.assertEqual(json.loads(rows[1]["steps"]), [{"text": "Собрать данные", "done": False}])
+        self.client.get("/")  # The undo toast is shown on the next page.
+        self.post(f"/tasks/{task['id']}/undo")
+        rows = self.tasks()
+        self.assertEqual([(row["due_date"], row["status"], row["repeat"]) for row in rows], [("2026-01-31", "To do", "monthly")])
+        # Re-opening a finished task does not create another copy.
+        self.post(f"/tasks/{task['id']}/status", status="Done")
+        self.post(f"/tasks/{task['id']}/status", status="To do")
+        self.post(f"/tasks/{task['id']}/status", status="Done")
+        self.assertEqual(len(self.tasks()), 2)
+
+    def test_next_due_dates(self):
+        from app import next_due
+        self.assertEqual(next_due("2026-12-31", "daily"), "2027-01-01")
+        self.assertEqual(next_due("2026-10-13", "weekly"), "2026-10-20")
+        self.assertEqual(next_due("2028-01-31", "monthly"), "2028-02-29")
+        self.assertEqual(next_due("2026-12-15", "monthly"), "2027-01-15")
+
     def test_study_requires_csrf(self):
         self.assertEqual(self.client.post("/study/sessions", data={"course": "x", "seconds": "600"}).status_code, 400)
         self.assertEqual(self.client.post("/schedule/import", data={"count": "0"}).status_code, 400)
