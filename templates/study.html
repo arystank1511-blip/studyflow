@@ -21,7 +21,7 @@
 {% endif %}
 
 <section class="page study-subjects" aria-labelledby="subjects-title">
-  <div class="workspace-head"><h2 id="subjects-title">{{ t('What are you studying?') }}</h2><a class="text-button" href="{{ url_for('focus') }}">{{ t('Pomodoro') }}</a></div>
+  <div class="workspace-head"><h2 id="subjects-title">{{ t('What are you studying?') }}</h2><span class="study-links"><a class="text-button" href="{{ url_for('study_groups') }}">{{ t('Study groups') }}</a><a class="text-button" href="{{ url_for('focus') }}">{{ t('Pomodoro') }}</a></span></div>
   <ul class="subject-list">
     {% for name in subjects %}
     <li class="subject" style="--course: {{ course_color(name) }}" data-subject="{{ name }}">

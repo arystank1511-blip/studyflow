@@ -18,8 +18,8 @@ from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
 import schedule_scan
 from dotenv import load_dotenv
-from cloud import (FeedStorageMissing, StudyStorageMissing, cloud_feed, cloud_sessions, cloud_tasks, feed_tasks,
-                   register_auth, valid_config)
+from cloud import (FeedStorageMissing, GroupsMissing, StudyStorageMissing, cloud_feed, cloud_sessions, cloud_tasks, feed_tasks,
+                   group_rpc, register_auth, valid_config)
 from werkzeug.exceptions import SecurityError
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -800,6 +800,93 @@ def study_sessions_since(day):
 
 def study_level(minutes):
     return 0 if minutes <= 0 else 1 if minutes < 30 else 2 if minutes < 60 else 3 if minutes < 120 else 4
+
+
+INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # No 0/O or 1/I: codes are read aloud and typed.
+
+
+def clean_name(field, limit):
+    value = " ".join(request.form.get(field, "").split())
+    return value if 0 < len(value) <= limit else None
+
+
+@app.get("/study/groups")
+def study_groups():
+    context = {"cloud": app.config["CLOUD_MODE"], "ready": True, "groups": [], "selected": None, "board": None, "page": "study",
+               "nickname": (g.user["email"].split("@")[0][:30] if g.get("user") else "")}
+    if not app.config["CLOUD_MODE"]:
+        return render_template("study_groups.html", **context)
+    try:
+        groups, _ = group_rpc("studyflow_my_groups")
+        groups = groups or []
+        wanted = request.args.get("group", type=int)
+        selected = next((group for group in groups if group["id"] == wanted), groups[0] if groups else None)
+        board = None
+        if selected:
+            today = user_today()
+            board, _ = group_rpc("studyflow_group_board", {"gid": selected["id"], "today": today.isoformat(),
+                                                           "week_start": (today - timedelta(days=today.weekday())).isoformat()})
+        context.update(groups=groups, selected=selected, board=board or [])
+    except GroupsMissing:
+        context["ready"] = False
+    return render_template("study_groups.html", **context)
+
+
+def groups_only():
+    if not app.config["CLOUD_MODE"]:
+        abort(404)
+
+
+@app.post("/study/groups/create")
+def create_group():
+    groups_only()
+    name, nickname = clean_name("name", 40), clean_name("nickname", 30)
+    if not name or not nickname:
+        flash("Enter a group name and a nickname.", "error")
+        return redirect(url_for("study_groups"))
+    code = "".join(secrets.choice(INVITE_ALPHABET) for _ in range(8))
+    try:
+        result, problem = group_rpc("studyflow_create_group", {"group_name": name, "nick": nickname, "code": code})
+    except GroupsMissing:
+        abort(503)
+    if problem:
+        flash("You can be in up to 10 groups. Leave one to create another.", "error")
+        return redirect(url_for("study_groups"))
+    flash("Group created. Share the invite code with your friends.", "success")
+    return redirect(url_for("study_groups", group=result["id"]))
+
+
+@app.post("/study/groups/join")
+def join_group():
+    groups_only()
+    code = request.form.get("code", "").strip().upper()
+    nickname = clean_name("nickname", 30)
+    if not re.fullmatch(r"[A-Z0-9]{8}", code) or not nickname:
+        flash("Enter the 8-character code and a nickname.", "error")
+        return redirect(url_for("study_groups"))
+    try:
+        result, problem = group_rpc("studyflow_join_group", {"code": code, "nick": nickname})
+    except GroupsMissing:
+        abort(503)
+    if problem:
+        flash("This group is full, or you are already in 10 groups.", "error")
+        return redirect(url_for("study_groups"))
+    if not result:
+        flash("No group has this code. Check it and try again.", "error")
+        return redirect(url_for("study_groups"))
+    flash("You joined the group.", "success")
+    return redirect(url_for("study_groups", group=result["id"]))
+
+
+@app.post("/study/groups/<int(min=1,max=9223372036854775807):group_id>/leave")
+def leave_group(group_id: int):
+    groups_only()
+    try:
+        group_rpc("studyflow_leave_group", {"gid": group_id})
+    except GroupsMissing:
+        abort(503)
+    flash("You left the group.", "success")
+    return redirect(url_for("study_groups"))
 
 
 @app.get("/study")

@@ -222,6 +222,10 @@ class ScheduleAndStudyTests(unittest.TestCase):
         self.assertEqual(next_due("2028-01-31", "monthly"), "2028-02-29")
         self.assertEqual(next_due("2026-12-15", "monthly"), "2027-01-15")
 
+    def test_study_groups_need_the_cloud(self):
+        self.assertIn(b"cloud account", self.client.get("/study/groups").data)
+        self.assertEqual(self.post("/study/groups/create", name="X", nickname="Y").status_code, 404)
+
     def test_study_requires_csrf(self):
         self.assertEqual(self.client.post("/study/sessions", data={"course": "x", "seconds": "600"}).status_code, 400)
         self.assertEqual(self.client.post("/schedule/import", data={"count": "0"}).status_code, 400)

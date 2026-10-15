@@ -88,6 +88,43 @@ class CloudSecurityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn(b"delete_account.sql", response.data)
 
+    def test_study_groups_use_caller_scoped_functions(self):
+        self.sign_in()
+        calls = []
+        groups = [{"id": 7, "name": "IT-21", "invite_code": "ABCD2345", "nickname": "alice", "members": 2}]
+        board = [{"nickname": "<b>bob</b>", "me": False, "today_minutes": 30, "week_minutes": 300},
+                 {"nickname": "alice", "me": True, "today_minutes": 0, "week_minutes": 120}]
+        def provider(method, path, **kwargs):
+            if path == "/auth/v1/user":
+                return self.provider(method, path, **kwargs)
+            calls.append((path.rsplit("/", 1)[1], kwargs.get("data"), kwargs.get("token")))
+            name = path.rsplit("/", 1)[1]
+            return {"studyflow_my_groups": groups, "studyflow_group_board": board, "studyflow_join_group": None,
+                    "studyflow_create_group": {"id": 9, "invite_code": "X"}}.get(name)
+        with patch("cloud.api", side_effect=provider):
+            page = self.client.get("/study/groups").get_data(as_text=True)
+            self.assertIn("&lt;b&gt;bob&lt;/b&gt;", page)  # Nicknames are escaped.
+            self.assertIn("ABCD2345", page)
+            self.assertIn("is-me", page)
+            self.assertNotIn("student@example.com</span>" + "x", page)
+            board_call = next(call for call in calls if call[0] == "studyflow_group_board")
+            self.assertEqual(board_call[1]["gid"], 7)
+            self.assertEqual(board_call[2], "alice-token")
+            # Unknown codes, bad input and CSRF never reach a group change.
+            self.assertIn("/study/groups", self.post("/study/groups/join", code="ZZZZ9999", nickname="al").location)
+            calls.clear()
+            self.post("/study/groups/join", code="bad", nickname="al")
+            self.post("/study/groups/create", name="  ", nickname="al")
+            self.client.post("/study/groups/create", data={"name": "X", "nickname": "al"})
+            self.assertEqual(calls, [])
+            response = self.post("/study/groups/create", name="  Physics   club ", nickname="al")
+            self.assertEqual(response.location, "/study/groups?group=9")
+            created = calls[-1][1]
+            self.assertEqual(created["group_name"], "Physics club")
+            self.assertRegex(created["code"], r"^[A-HJ-NP-Z2-9]{8}$")
+        with patch("cloud.api", side_effect=lambda method, path, **kw: self.provider(method, path, **kw) if path == "/auth/v1/user" else (_ for _ in ()).throw(CloudError(404))):
+            self.assertIn(b"study_groups.sql", self.client.get("/study/groups").data)
+
     def test_welcome_page_and_robots_are_public(self):
         with patch("cloud.api") as remote:
             page = self.client.get("/welcome", headers={"Accept-Language": "ru"})

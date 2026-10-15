@@ -1,0 +1,61 @@
+{% extends 'layout.html' %}
+{% macro clock(minutes) %}{{ '%d:%02d'|format(minutes // 60, minutes % 60) }}{% endmacro %}
+{% block title %}{{ t('Study groups') }} · StudyFlow{% endblock %}
+{% block dashboard_content %}
+<header class="page-intro"><div><h1>{{ t('Study groups') }}</h1><p>{{ t('Study with friends or classmates: see who studied the most this week. Members see only your nickname and study time.') }}</p></div></header>
+
+{% if not cloud %}
+<div class="empty"><h3>{{ t('Groups need a cloud account.') }}</h3><p>{{ t('Sign in to create a group or join one with a code.') }}</p></div>
+{% elif not ready %}
+<p class="flash error" role="status">{{ t('Study groups are not connected yet: the site owner needs to run supabase/study_groups.sql in Supabase.') }}</p>
+{% else %}
+  {% if groups %}
+  <nav class="view-tabs group-tabs" aria-label="{{ t('Your groups') }}">
+    {% for group in groups %}<a href="{{ url_for('study_groups', group=group.id) }}" {% if selected and selected.id == group.id %}aria-current="page"{% endif %}>{{ group.name }} <span>{{ group.members }}</span></a>{% endfor %}
+  </nav>
+  {% endif %}
+
+  {% if selected %}
+  <section class="page group-board" aria-labelledby="board-title">
+    <div class="workspace-head">
+      <h2 id="board-title">{{ t('This week in {group}', group=selected.name) }}</h2>
+      <span class="group-code">{{ t('Invite code') }} <input id="invite-code" value="{{ selected.invite_code }}" readonly size="9" aria-label="{{ t('Invite code') }}"><button class="secondary" type="button" data-copy="#invite-code" data-copied="{{ t('Copied') }}">{{ t('Copy') }}</button></span>
+    </div>
+    {% if board %}
+    <ol class="ranking">
+      {% for row in board %}
+      <li class="{{ 'is-me' if row.me }}" style="--share: {{ ((row.week_minutes / board[0].week_minutes * 100) if board[0].week_minutes else 0)|round(1) }}%">
+        <span class="rank">{{ loop.index }}</span>
+        <span class="rank-name">{{ row.nickname }}{% if row.me %} <small>{{ t('you') }}</small>{% endif %}</span>
+        <span class="rank-bar" aria-hidden="true"><span></span></span>
+        <span class="rank-time"><strong>{{ clock(row.week_minutes) }}</strong><small>{{ t('today {time}', time=clock(row.today_minutes)) }}</small></span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+    <p class="study-note">{{ t('Time comes from the stopwatch on the Study page. The week starts on Monday.') }}</p>
+    <form method="post" action="{{ url_for('leave_group', group_id=selected.id) }}" data-confirm="{{ t('Leave this group?') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="text-button" type="submit">{{ t('Leave the group') }}</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="workspace-board group-forms" aria-label="{{ t('Create or join a group') }}">
+    <form method="post" action="{{ url_for('join_group') }}" class="group-form">
+      <h2>{{ t('Join with a code') }}</h2>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>{{ t('Invite code') }}<input name="code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" required pattern="[A-Za-z0-9]{8}" placeholder="ABCD2345"></label>
+      <label>{{ t('Your nickname in the group') }}<input name="nickname" maxlength="30" value="{{ nickname }}" required></label>
+      <button class="primary" type="submit">{{ t('Join') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('create_group') }}" class="group-form">
+      <h2>{{ t('New group') }}</h2>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>{{ t('Group name') }}<input name="name" maxlength="40" required placeholder="{{ t('e.g. IT-21 or Physics club') }}"></label>
+      <label>{{ t('Your nickname in the group') }}<input name="nickname" maxlength="30" value="{{ nickname }}" required></label>
+      <button class="secondary" type="submit">{{ t('Create group') }}</button>
+    </form>
+  </section>
+{% endif %}
+{% endblock %}

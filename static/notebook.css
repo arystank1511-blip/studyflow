@@ -752,6 +752,33 @@ label > span { font-weight: 400; color: var(--text-3); }
 .author-credit { margin: 4px 0 0; font: 700 22px/1.1 var(--hand); color: var(--ink); }
 .auth-shell > .author-credit { margin-top: 18px; text-align: center; }
 
+.study-links { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.group-tabs { margin-bottom: 14px; }
+.group-board .workspace-head { flex-wrap: wrap; gap: 10px; }
+.group-code { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.group-code input { width: 12.5ch; min-height: 40px; padding: 0 8px; font: 600 15px/1 var(--sans); letter-spacing: .12em; text-align: center; }
+.ranking { display: grid; gap: 4px; margin: 6px 0 12px; padding: 0; list-style: none; }
+.ranking li { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(60px, 1.2fr) auto; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px; border-radius: var(--radius-sm); }
+.ranking li.is-me { background: var(--ink-soft); }
+.rank { font-family: var(--hand); font-size: 26px; font-weight: 700; color: var(--text-3); text-align: center; }
+.ranking li:first-child .rank { color: var(--pen-red); }
+.rank-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.rank-name small { font-weight: 500; color: var(--ink); }
+.rank-bar { height: 8px; border-radius: 999px; background: var(--rule); overflow: hidden; }
+.rank-bar span { display: block; width: var(--share); height: 100%; border-radius: inherit; background: var(--ink); }
+.rank-time { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
+.rank-time small { color: var(--text-3); font-size: 12px; }
+.group-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.group-form { display: grid; gap: 10px; align-content: start; }
+.group-form h2 { margin: 0; font-size: 18px; }
+.group-form button { justify-self: start; }
+@media (max-width: 760px) {
+  .group-forms { grid-template-columns: 1fr; }
+  .group-code { width: 100%; flex-wrap: wrap; }
+  .group-code input { flex: 1 1 12.5ch; }
+  .ranking li { grid-template-columns: 24px minmax(0, 1fr) auto; }
+  .rank-bar { display: none; }
+}
 .delete-account { max-width: 560px; }
 .delete-account h1 { margin: 0 0 10px; font-size: 24px; }
 .delete-account p { color: var(--text-2); }

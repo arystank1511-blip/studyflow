@@ -486,6 +486,24 @@ def cloud_sessions(method="GET", data=None, since=None):
         abort(503)
 
 
+class GroupsMissing(Exception):
+    """The study-group functions have not been created in Supabase yet."""
+
+
+def group_rpc(name, data=None):
+    """Call a study-group function as the signed-in student. Returns (result, error_status)."""
+    if not g.get("user") or not g.get("access_token"):
+        abort(401)
+    try:
+        return api("POST", "/rest/v1/rpc/" + name, token=g.access_token, data=data or {}), None
+    except CloudError as error:
+        if error.status == 404:
+            raise GroupsMissing() from None
+        if error.status in (400, 409):
+            return None, error.status  # A limit inside the function (too many groups, group full).
+        abort(503)
+
+
 class FeedStorageMissing(Exception):
     """The calendar-feed table has not been created in Supabase yet."""
 
