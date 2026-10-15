@@ -268,6 +268,11 @@ def init_db() -> None:
             );
             """
         )
+        if "is_exam" not in {row[1] for row in db.execute("PRAGMA table_info(tasks)")}:
+            db.execute("ALTER TABLE tasks ADD COLUMN is_exam INTEGER NOT NULL DEFAULT 0")
+            for task_id, title, course in db.execute("SELECT id, title, course FROM tasks").fetchall():
+                if looks_like_exam(title, course):
+                    db.execute("UPDATE tasks SET is_exam = 1 WHERE id = ?", (task_id,))
         db.commit()
 
 
@@ -494,11 +499,27 @@ def ics_calendar(tasks, refresh=False) -> str:
 @app.get("/export.json")
 def data_export():
     fields = ("id", "title", "course", "due_date", "priority", "status", "notes", "created_at")
-    tasks = [{key: (str(task[key]) if key in ("due_date", "created_at") else task[key]) for key in fields}
+    tasks = [{**{key: (str(task[key]) if key in ("due_date", "created_at") else task[key]) for key in fields}, "is_exam": is_exam(task)}
              for task in sorted(all_tasks(), key=lambda item: item["id"])]
     body = json.dumps({"app": "StudyFlow", "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tasks": tasks},
                       ensure_ascii=False, indent=2)
     return download(body, "application/json", "studyflow-export.json")
+
+
+EXAM_WORDS = ("экзамен", "емтихан", "exam", "коллоквиум", "сессия", "сессиясы", "midterm", "final", "рубеж", "тест", "test", "quiz", "аралық")
+
+
+def looks_like_exam(title, course=""):
+    """A guess for quick add and old clients; the task form's checkbox always wins."""
+    text = (title + " " + course).casefold()
+    return any(word in text for word in EXAM_WORDS)
+
+
+def is_exam(task):
+    try:
+        return bool(task["is_exam"])
+    except (KeyError, IndexError):  # Rows from before the column existed.
+        return False
 
 
 def validated_task():
@@ -521,7 +542,9 @@ def validated_task():
         errors["due_date"] = "Choose a valid due date."
     if priority not in {"Low", "Medium", "High"}:
         priority = "Medium"
-    return {"title": title[:100], "course": course[:80], "due_date": due_date[:10], "notes": notes[:300], "priority": priority}, errors
+    exam = request.form.get("is_exam") == "1" if request.form.get("exam_field") else looks_like_exam(title, course)
+    return {"title": title[:100], "course": course[:80], "due_date": due_date[:10], "notes": notes[:300], "priority": priority,
+            "is_exam": exam}, errors
 
 
 def insert_task(values):
@@ -529,8 +552,9 @@ def insert_task(values):
         cloud_tasks("POST", data=values)
     else:
         get_db().execute(
-            "INSERT INTO tasks (title, course, due_date, priority, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], datetime.now().isoformat(timespec="seconds")),
+            "INSERT INTO tasks (title, course, due_date, priority, notes, is_exam, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(bool(values.get("is_exam"))),
+             datetime.now().isoformat(timespec="seconds")),
         )
         get_db().commit()
 
@@ -543,6 +567,7 @@ def quick_values(text):
     if len(parsed["course"]) > 80:
         errors["course"] = "Enter a course between 1 and 80 characters."
     values = {key: parsed[key] for key in ("title", "course", "due_date", "priority", "notes")}
+    values["is_exam"] = looks_like_exam(values["title"], values["course"])
     return values, parsed["found"], errors
 
 
@@ -661,7 +686,6 @@ def schedule_import():
     return redirect(url_for("index", view="week", _anchor="task-workspace"))
 
 
-EXAM_WORDS = ("экзамен", "емтихан", "exam", "коллоквиум", "сессия", "сессиясы", "midterm", "final", "рубеж", "тест", "test", "quiz", "аралық")
 
 
 def study_sessions_since(day):
@@ -708,8 +732,7 @@ def study():
             minutes = by_day.get(day.isoformat(), 0)
             column.append({"date": day.isoformat(), "minutes": minutes, "level": study_level(minutes), "future": day > today})
         heatmap.append(column)
-    exams = sorted((task for task in active if str(task["due_date"]) >= today.isoformat()
-                    and any(word in (task["title"] + " " + task["course"]).casefold() for word in EXAM_WORDS)),
+    exams = sorted((task for task in active if str(task["due_date"]) >= today.isoformat() and is_exam(task)),
                    key=lambda task: str(task["due_date"]))[:3]
     ddays = [{"title": task["title"], "course": task["course"],
               "days": (date.fromisoformat(str(task["due_date"])) - today).days} for task in exams]
@@ -784,8 +807,8 @@ def edit_task(task_id):
         if app.config["CLOUD_MODE"]:
             cloud_tasks("PATCH", task_id, values)
         else:
-            get_db().execute("UPDATE tasks SET title = ?, course = ?, due_date = ?, priority = ?, notes = ? WHERE id = ?",
-                             (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], task_id))
+            get_db().execute("UPDATE tasks SET title = ?, course = ?, due_date = ?, priority = ?, notes = ?, is_exam = ? WHERE id = ?",
+                             (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(values["is_exam"]), task_id))
             get_db().commit()
         flash("Task updated. Your plan and progress are up to date.", "success")
         if request.form.get("workspace") == "unified":

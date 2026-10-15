@@ -8,7 +8,7 @@
     <button class="quick-done {{ 'is-checked' if done }}" type="submit" aria-pressed="{{ 'true' if done else 'false' }}" aria-label="{{ t('Reopen {title}', title=task.title) if done else t('Mark {title} as done', title=task.title) }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="sr-only">{{ t('Reopen') if done else t('Mark done') }}</span></button>
   </form>
   <div class="work-task-content">
-    <div class="work-task-heading"><h3>{{ task.title }}</h3>{% if task.priority == 'High' %}<span class="priority high">{{ t('High') }}</span>{% elif task.status == 'In progress' and not done %}<span class="priority in-progress">{{ t('In progress') }}</span>{% endif %}</div>
+    <div class="work-task-heading"><h3>{{ task.title }}</h3>{% if task.is_exam %}<span class="priority exam">{{ t('Exam') }}</span>{% endif %}{% if task.priority == 'High' %}<span class="priority high">{{ t('High') }}</span>{% elif task.status == 'In progress' and not done %}<span class="priority in-progress">{{ t('In progress') }}</span>{% endif %}</div>
     <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if late }}">{% if late %}{{ t("Overdue") }}, {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span>{% if task.priority != 'High' %}<span class="sr-only">{{ t('{priority} priority', priority=t(task.priority)) }}</span>{% endif %}</div>
     {% if task.notes %}<details class="task-notes"><summary>{{ t("Notes") }}</summary><p>{{ task.notes }}</p></details>{% endif %}
   </div>

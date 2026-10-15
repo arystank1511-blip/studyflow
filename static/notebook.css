@@ -244,6 +244,11 @@ label > span { font-weight: 400; color: var(--text-3); }
 .priority.high { color: var(--pen-red); }
 .priority.high::before { content: "!"; margin-right: 3px; }
 .priority.in-progress { color: var(--ink); font-weight: 600; }
+.priority.exam { padding: 1px 7px; border-radius: 999px; background: var(--marker-bg); color: var(--ink); }
+.exam-toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.exam-toggle input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--ink); }
+.exam-toggle span { display: grid; gap: 2px; font-weight: 600; }
+.exam-toggle small { font-weight: 400; color: var(--text-2); }
 .work-task-details { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; font-size: 13px; color: var(--text-3); }
 .work-task-details .course { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-weight: 500; }
 .work-task-details .course::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--course, var(--ink)); }

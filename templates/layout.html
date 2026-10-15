@@ -64,6 +64,7 @@
         <label>{{ t("Due date") }}<input type="date" name="due_date" value="{{ task_form.get('due_date', day|default('')) }}" {% if task_errors.get('due_date') %}aria-invalid="true" aria-describedby="error-due_date"{% endif %} required>{{ field_error('due_date') }}</label>
         <label>{{ t("Priority") }}<select name="priority">{% for priority in ['Medium', 'High', 'Low'] %}<option value="{{ priority }}" {{ 'selected' if task_form.get('priority') == priority }}>{{ t(priority) }}</option>{% endfor %}</select></label>
       </div>
+      <label class="exam-toggle"><input type="hidden" name="exam_field" value="1"><input type="checkbox" name="is_exam" value="1" {{ 'checked' if task_form.get('is_exam') }}><span>{{ t("Exam or test") }}<small>{{ t("Gets a D-day countdown on the Study page.") }}</small></span></label>
       <label>{{ t("Notes") }} <span>{{ t("(optional)") }}</span><textarea name="notes" maxlength="300" placeholder="{{ t("Add a note for future you…") }}" {% if task_errors.get('notes') %}aria-invalid="true" aria-describedby="error-notes"{% endif %}>{{ task_form.get('notes', '') }}</textarea>{{ field_error('notes') }}</label>
       <button class="primary" type="submit">{{ t("Create task") }} <span aria-hidden="true">→</span></button>
     </form>

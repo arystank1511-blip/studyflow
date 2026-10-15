@@ -154,6 +154,24 @@ class ScheduleAndStudyTests(unittest.TestCase):
         self.assertEqual(app.test_client().get(link.removeprefix("http://localhost")).status_code, 404)
         self.assertEqual(self.client.post("/calendar/subscription", data={"action": "create"}).status_code, 400)  # CSRF.
 
+    def test_exam_mark_drives_the_countdown(self):
+        soon = (date.today() + timedelta(days=4)).isoformat()
+        # The form's checkbox wins over the title: an exam without the word, and a "test" that is not one.
+        self.post("/tasks", title="Анатомия", course="Био", due_date=soon, exam_field="1", is_exam="1")
+        self.post("/tasks", title="Тест драйв", course="Хобби", due_date=soon, exam_field="1")
+        self.post("/tasks/quick", text="Экзамен по истории послезавтра")  # Quick add guesses from the words.
+        rows = {row["title"]: row["is_exam"] for row in self.tasks()}
+        self.assertEqual(rows["Анатомия"], 1)
+        self.assertEqual(rows["Тест драйв"], 0)
+        self.assertEqual(rows["Экзамен по истории"], 1)
+        page = self.client.get("/study").get_data(as_text=True)
+        self.assertIn("Анатомия", page)
+        self.assertNotIn("Тест драйв", page)
+        self.assertIn("priority exam", self.client.get("/?view=all").get_data(as_text=True))
+        task_id = next(row["id"] for row in self.tasks() if row["title"] == "Анатомия")
+        self.post(f"/tasks/{task_id}/edit", title="Анатомия", course="Био", due_date=soon, priority="Medium", exam_field="1")
+        self.assertEqual(next(row["is_exam"] for row in self.tasks() if row["id"] == task_id), 0)
+
     def test_study_requires_csrf(self):
         self.assertEqual(self.client.post("/study/sessions", data={"course": "x", "seconds": "600"}).status_code, 400)
         self.assertEqual(self.client.post("/schedule/import", data={"count": "0"}).status_code, 400)
