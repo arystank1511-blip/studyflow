@@ -1,6 +1,7 @@
 {% macro task_card(task, page, filters, today) %}
 {% set done = task.status == 'Done' %}
 {% set late = not done and task.due_date < today %}
+{% set steps = task_steps(task) %}{% set repeat = task_repeat(task) %}
 <article class="work-task priority-{{ task.priority|lower }} {{ 'is-done' if done }} {{ 'is-late' if late }}" style="--course: {{ course_color(task.course) }}">
   <form class="quick-done-form" method="post" action="{{ url_for('update_status', task_id=task.id, **filters) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}">
@@ -9,7 +10,13 @@
   </form>
   <div class="work-task-content">
     <div class="work-task-heading"><h3>{{ task.title }}</h3>{% if task.is_exam %}<span class="priority exam">{{ t('Exam') }}</span>{% endif %}{% if task.priority == 'High' %}<span class="priority high">{{ t('High') }}</span>{% elif task.status == 'In progress' and not done %}<span class="priority in-progress">{{ t('In progress') }}</span>{% endif %}</div>
-    <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if late }}">{% if late %}{{ t("Overdue") }}, {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span>{% if task.priority != 'High' %}<span class="sr-only">{{ t('{priority} priority', priority=t(task.priority)) }}</span>{% endif %}</div>
+    <div class="work-task-details"><span class="course">{{ task.course }}</span><span class="due {{ 'late' if late }}">{% if late %}{{ t("Overdue") }}, {% endif %}<time datetime="{{ task.due_date }}">{{ task.due_date }}</time></span>{% if repeat %}<span class="task-repeat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3"/></svg>{{ t(REPEATS[repeat]) }}</span>{% endif %}{% if task.priority != 'High' %}<span class="sr-only">{{ t('{priority} priority', priority=t(task.priority)) }}</span>{% endif %}</div>
+    {% if steps %}
+    <details class="task-steps"{% if not done and steps|selectattr('done')|list|length < steps|length %} open{% endif %}>
+      <summary>{{ t("Checklist") }} <span>{{ steps|selectattr('done')|list|length }}/{{ steps|length }}</span></summary>
+      <ul>{% for step in steps %}<li><form method="post" action="{{ url_for('toggle_step', task_id=task.id, index=loop.index0, **filters) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ page }}"><button type="submit" class="step-toggle {{ 'is-done' if step.done }}" aria-pressed="{{ 'true' if step.done else 'false' }}" aria-label="{{ t('Mark step {step} as not done', step=step.text) if step.done else t('Mark step {step} as done', step=step.text) }}"><span class="step-box" aria-hidden="true"></span><span class="step-text">{{ step.text }}</span></button></form></li>{% endfor %}</ul>
+    </details>
+    {% endif %}
     {% if task.notes %}<details class="task-notes"><summary>{{ t("Notes") }}</summary><p>{{ task.notes }}</p></details>{% endif %}
   </div>
   <details class="task-more">

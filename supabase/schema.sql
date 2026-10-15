@@ -11,6 +11,8 @@ create table public.studyflow_tasks (
   status text not null default 'To do' check (status in ('To do', 'In progress', 'Done')),
   notes text not null default '' check (char_length(notes) <= 300),
   is_exam boolean not null default false,
+  repeat text not null default '' check (repeat in ('', 'daily', 'weekly', 'monthly')),
+  steps jsonb not null default '[]'::jsonb check (jsonb_typeof(steps) = 'array' and jsonb_array_length(steps) <= 20 and octet_length(steps::text) <= 4000),
   created_at timestamptz not null default now()
 );
 create index studyflow_tasks_owner_due on public.studyflow_tasks(user_id, due_date);
@@ -18,8 +20,8 @@ alter table public.studyflow_tasks enable row level security;
 alter table public.studyflow_tasks force row level security;
 revoke all on public.studyflow_tasks from anon, authenticated;
 grant select, delete on public.studyflow_tasks to authenticated;
-grant insert (user_id, title, course, due_date, priority, status, notes, is_exam) on public.studyflow_tasks to authenticated;
-grant update (title, course, due_date, priority, status, notes, is_exam) on public.studyflow_tasks to authenticated;
+grant insert (user_id, title, course, due_date, priority, status, notes, is_exam, repeat, steps) on public.studyflow_tasks to authenticated;
+grant update (title, course, due_date, priority, status, notes, is_exam, repeat, steps) on public.studyflow_tasks to authenticated;
 grant usage on sequence public.studyflow_tasks_id_seq to authenticated;
 create policy "Read own tasks" on public.studyflow_tasks for select to authenticated
   using ((select auth.uid()) = user_id);

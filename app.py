@@ -104,10 +104,65 @@ def current_task(task_id):
     return task
 
 
+REPEATS = {"": "Does not repeat", "daily": "Every day", "weekly": "Every week", "monthly": "Every month"}
+MAX_STEPS = 20
+
+
+def next_due(due: str, repeat: str) -> str:
+    day = date.fromisoformat(str(due))
+    if repeat == "daily":
+        return (day + timedelta(days=1)).isoformat()
+    if repeat == "weekly":
+        return (day + timedelta(days=7)).isoformat()
+    year, month = (day.year + 1, 1) if day.month == 12 else (day.year, day.month + 1)
+    for last in (31, 30, 29, 28):  # 31 January -> 28/29 February, and so on.
+        try:
+            return date(year, month, min(day.day, last)).isoformat()
+        except ValueError:
+            continue
+    raise ValueError(due)
+
+
+def task_steps(task) -> list[dict]:
+    """The checklist of a task: [{"text": str, "done": bool}], whatever the storage returned."""
+    try:
+        raw = task["steps"]
+    except (KeyError, IndexError):
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw or "[]")
+        except ValueError:
+            return []
+    if not isinstance(raw, list):
+        return []
+    return [{"text": str(step.get("text", ""))[:100], "done": bool(step.get("done"))}
+            for step in raw[:MAX_STEPS] if isinstance(step, dict) and str(step.get("text", "")).strip()]
+
+
+def task_repeat(task) -> str:
+    try:
+        value = task["repeat"] or ""
+    except (KeyError, IndexError):
+        return ""
+    return value if value in REPEATS else ""
+
+
+app.jinja_env.globals.update(task_steps=task_steps, task_repeat=task_repeat, REPEATS=REPEATS)
+
+
+def stored(field, value):
+    """SQLite keeps the checklist as JSON text; Supabase stores it as jsonb."""
+    if field == "steps" and not app.config["CLOUD_MODE"]:
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
 def set_task_field(task_id, field, value):
     if app.config["CLOUD_MODE"]:
         cloud_tasks("PATCH", task_id, {field: value})
     else:
+        value = stored(field, value)
         db = get_db()
         # Field names come from a fixed allowlist, never from the request.
         if not db.execute(f"UPDATE tasks SET {field} = ? WHERE id = ?", (value, task_id)).rowcount:
@@ -268,7 +323,12 @@ def init_db() -> None:
             );
             """
         )
-        if "is_exam" not in {row[1] for row in db.execute("PRAGMA table_info(tasks)")}:
+        columns = {row[1] for row in db.execute("PRAGMA table_info(tasks)")}
+        if "repeat" not in columns:
+            db.execute("ALTER TABLE tasks ADD COLUMN repeat TEXT NOT NULL DEFAULT ''")
+        if "steps" not in columns:
+            db.execute("ALTER TABLE tasks ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
+        if "is_exam" not in columns:
             db.execute("ALTER TABLE tasks ADD COLUMN is_exam INTEGER NOT NULL DEFAULT 0")
             for task_id, title, course in db.execute("SELECT id, title, course FROM tasks").fetchall():
                 if looks_like_exam(title, course):
@@ -510,7 +570,8 @@ def ics_calendar(tasks, refresh=False) -> str:
 @app.get("/export.json")
 def data_export():
     fields = ("id", "title", "course", "due_date", "priority", "status", "notes", "created_at")
-    tasks = [{**{key: (str(task[key]) if key in ("due_date", "created_at") else task[key]) for key in fields}, "is_exam": is_exam(task)}
+    tasks = [{**{key: (str(task[key]) if key in ("due_date", "created_at") else task[key]) for key in fields}, "is_exam": is_exam(task),
+              "repeat": task_repeat(task), "steps": task_steps(task)}
              for task in sorted(all_tasks(), key=lambda item: item["id"])]
     body = json.dumps({"app": "StudyFlow", "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tasks": tasks},
                       ensure_ascii=False, indent=2)
@@ -533,7 +594,16 @@ def is_exam(task):
         return False
 
 
-def validated_task():
+def steps_from_form(previous):
+    """One step per line; a step that keeps its text keeps its tick."""
+    done = {step["text"]: step["done"] for step in previous}
+    lines = [line.strip() for line in request.form.get("steps", "").splitlines() if line.strip()]
+    if len(lines) > MAX_STEPS or any(len(line) > 100 for line in lines):
+        return None
+    return [{"text": line, "done": done.get(line, False)} for line in lines]
+
+
+def validated_task(previous_steps=()):
     title = request.form.get("title", "").strip()
     course = request.form.get("course", "").strip()
     due_date = request.form.get("due_date", "")
@@ -554,20 +624,42 @@ def validated_task():
     if priority not in {"Low", "Medium", "High"}:
         priority = "Medium"
     exam = request.form.get("is_exam") == "1" if request.form.get("exam_field") else looks_like_exam(title, course)
-    return {"title": title[:100], "course": course[:80], "due_date": due_date[:10], "notes": notes[:300], "priority": priority,
-            "is_exam": exam}, errors
+    values = {"title": title[:100], "course": course[:80], "due_date": due_date[:10], "notes": notes[:300], "priority": priority,
+              "is_exam": exam}
+    if request.form.get("steps_field"):  # Forms without these fields leave them as they are.
+        repeat = request.form.get("repeat", "")
+        values["repeat"] = repeat if repeat in REPEATS else ""
+        steps = steps_from_form(list(previous_steps))
+        if steps is None:
+            errors["steps"] = "Use up to 20 steps of at most 100 characters each."
+            steps = list(previous_steps)
+        values["steps"] = steps
+    return values, errors
 
 
 def insert_task(values):
+    """Save a new task and return its id."""
+    values = {"repeat": "", "steps": [], **values}
     if app.config["CLOUD_MODE"]:
-        cloud_tasks("POST", data=values)
-    else:
-        get_db().execute(
-            "INSERT INTO tasks (title, course, due_date, priority, notes, is_exam, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(bool(values.get("is_exam"))),
-             datetime.now().isoformat(timespec="seconds")),
-        )
-        get_db().commit()
+        rows = cloud_tasks("POST", data=values)
+        return rows[0]["id"] if rows else None
+    cursor = get_db().execute(
+        "INSERT INTO tasks (title, course, due_date, priority, notes, is_exam, repeat, steps, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(bool(values.get("is_exam"))),
+         values["repeat"], stored("steps", values["steps"]), datetime.now().isoformat(timespec="seconds")),
+    )
+    get_db().commit()
+    return cursor.lastrowid
+
+
+def remove_task(task_id):
+    if app.config["CLOUD_MODE"]:
+        cloud_tasks("DELETE", task_id)
+        return
+    db = get_db()
+    if not db.execute("DELETE FROM tasks WHERE id = ?", (task_id,)).rowcount:
+        abort(404)
+    db.commit()
 
 
 def quick_values(text):
@@ -810,7 +902,7 @@ def edit_task(task_id):
     task = cloud_tasks(task_id=task_id)[0] if app.config["CLOUD_MODE"] else get_db().execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if task is None:
         abort(404)
-    values, errors = (validated_task() if request.method == "POST" else (dict(task), {}))
+    values, errors = (validated_task(task_steps(task)) if request.method == "POST" else (dict(task), {}))
     destination = request.values.get("next", "dashboard")
     if destination not in {"dashboard", "planner", "progress"}:
         destination = "dashboard"
@@ -818,8 +910,9 @@ def edit_task(task_id):
         if app.config["CLOUD_MODE"]:
             cloud_tasks("PATCH", task_id, values)
         else:
-            get_db().execute("UPDATE tasks SET title = ?, course = ?, due_date = ?, priority = ?, notes = ?, is_exam = ? WHERE id = ?",
-                             (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(values["is_exam"]), task_id))
+            get_db().execute("UPDATE tasks SET title = ?, course = ?, due_date = ?, priority = ?, notes = ?, is_exam = ?, repeat = ?, steps = ? WHERE id = ?",
+                             (values["title"], values["course"], values["due_date"], values["priority"], values["notes"], int(values["is_exam"]),
+                              values.get("repeat", task_repeat(task)), stored("steps", values.get("steps", task_steps(task))), task_id))
             get_db().commit()
         flash("Task updated. Your plan and progress are up to date.", "success")
         if request.form.get("workspace") == "unified":
@@ -836,9 +929,18 @@ def update_status(task_id: int):
     if status not in {"To do", "In progress", "Done"}:
         flash("Invalid task status.", "error")
         return return_to_workspace()
-    previous = current_task(task_id)["status"]
+    task = current_task(task_id)
+    previous = task["status"]
     set_task_field(task_id, "status", status)
-    if previous != status:
+    repeat = task_repeat(task)
+    if status == "Done" and previous != "Done" and repeat:
+        next_id = insert_task({"title": task["title"], "course": task["course"], "due_date": next_due(task["due_date"], repeat),
+                               "priority": task["priority"], "notes": task["notes"] or "", "is_exam": is_exam(task), "repeat": repeat,
+                               "steps": [{"text": step["text"], "done": False} for step in task_steps(task)]})
+        set_task_field(task_id, "repeat", "")  # The repeat moves on to the next task.
+        offer_undo(task_id, "status", previous, "Task marked as done. The next one is in your plan.")
+        session["undo"].update(spawned=next_id, repeat=repeat)
+    elif previous != status:
         offer_undo(task_id, "status", previous, "Task marked as done." if status == "Done" else "Task status updated.")
     else:
         flash("Task status updated.", "success")
@@ -856,7 +958,20 @@ def undo_change(task_id: int):
     if not valid:
         abort(400)
     set_task_field(task_id, undo["field"], value)
+    if undo.get("spawned") and undo.get("repeat") in REPEATS:
+        remove_task(int(undo["spawned"]))
+        set_task_field(task_id, "repeat", undo["repeat"])
     flash("Change undone.", "success")
+    return return_to_workspace()
+
+
+@app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/steps/<int(max=19):index>")
+def toggle_step(task_id: int, index: int):
+    steps = task_steps(current_task(task_id))
+    if index >= len(steps):
+        abort(404)
+    steps[index]["done"] = not steps[index]["done"]
+    set_task_field(task_id, "steps", steps)
     return return_to_workspace()
 
 
@@ -871,14 +986,7 @@ def snooze_task(task_id: int):
 
 @app.post("/tasks/<int(min=1,max=9223372036854775807):task_id>/delete")
 def delete_task(task_id: int):
-    if app.config["CLOUD_MODE"]:
-        cloud_tasks("DELETE", task_id)
-    else:
-        db = get_db()
-        result = db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-        if not result.rowcount:
-            abort(404)
-        db.commit()
+    remove_task(task_id)
     flash("Task deleted.", "success")
     return return_to_workspace()
 

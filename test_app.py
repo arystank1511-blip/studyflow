@@ -475,7 +475,7 @@ class StudyFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.get_data(as_text=True))
         self.assertEqual(data["tasks"][0]["title"], "Отчёт по физике")
-        self.assertEqual(set(data["tasks"][0]), {"id", "title", "course", "due_date", "priority", "status", "notes", "created_at", "is_exam"})
+        self.assertEqual(set(data["tasks"][0]), {"id", "title", "course", "due_date", "priority", "status", "notes", "created_at", "is_exam", "repeat", "steps"})
 
 
 if __name__ == "__main__":
