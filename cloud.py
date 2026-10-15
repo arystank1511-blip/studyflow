@@ -500,7 +500,7 @@ def cloud_tasks(method="GET", task_id=None, data=None):
     if task_id is not None:
         params["id"] = "eq." + str(int(task_id))
     if data is not None:
-        data = {key: value for key, value in data.items() if key in {"title", "course", "due_date", "priority", "notes", "status"}}
+        data = {key: value for key, value in data.items() if key in {"title", "course", "due_date", "priority", "notes", "status", "is_exam"}}
         if method == "POST":
             data["user_id"] = g.user["id"]
     try:
