@@ -126,6 +126,34 @@ class ScheduleAndStudyTests(unittest.TestCase):
         self.assertIn("heat level-3", page)  # 85 minutes is the "60–120" level.
         self.assertIn("1 days in a row", page)
 
+    # ---------- calendar subscription ----------
+    def test_calendar_feed_link_is_secret_shown_once_and_revocable(self):
+        self.post("/tasks", title="Курсовая", course="Право", due_date=(date.today() + timedelta(days=3)).isoformat())
+        self.post("/tasks", title="Сдано", course="Право", due_date=date.today().isoformat())
+        with app.app_context():
+            get_db().execute("UPDATE tasks SET status = 'Done' WHERE title = 'Сдано'")
+            get_db().commit()
+        self.assertIn(b'value="create"', self.client.get("/progress").data)
+        self.assertEqual(self.post("/calendar/subscription", action="other").status_code, 400)
+        self.post("/calendar/subscription", action="create")
+        page = self.client.get("/progress").get_data(as_text=True)
+        link = page.split('id="feed-url" value="')[1].split('"')[0]
+        self.assertRegex(link, r"^http://localhost/calendar/feed/[A-Za-z0-9_-]{43}\.ics$")
+        self.assertIn("calendar.google.com/calendar/render?cid=webcal", page)
+        self.assertNotIn(link, self.client.get("/progress").get_data(as_text=True))  # Shown only once.
+        with app.app_context():
+            stored = get_db().execute("SELECT token_hash FROM calendar_feed").fetchone()["token_hash"]
+        self.assertNotIn(stored, link)  # Only the hash is kept.
+        feed = app.test_client().get(link.removeprefix("http://localhost"))  # No cookies, like a calendar app.
+        self.assertEqual(feed.mimetype, "text/calendar")
+        self.assertIn("Курсовая".encode(), feed.data)
+        self.assertNotIn("Сдано".encode(), feed.data)
+        self.assertIn(b"REFRESH-INTERVAL", feed.data)
+        self.assertEqual(app.test_client().get("/calendar/feed/" + "A" * 43 + ".ics").status_code, 404)
+        self.post("/calendar/subscription", action="off")
+        self.assertEqual(app.test_client().get(link.removeprefix("http://localhost")).status_code, 404)
+        self.assertEqual(self.client.post("/calendar/subscription", data={"action": "create"}).status_code, 400)  # CSRF.
+
     def test_study_requires_csrf(self):
         self.assertEqual(self.client.post("/study/sessions", data={"course": "x", "seconds": "600"}).status_code, 400)
         self.assertEqual(self.client.post("/schedule/import", data={"count": "0"}).status_code, 400)

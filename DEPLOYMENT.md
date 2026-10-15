@@ -20,6 +20,7 @@ StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase man
 ### Study timer and timetable scanning
 
 - Run `supabase/study_sessions.sql` once in the SQL Editor. Until then the Study page says time cannot be saved; nothing else breaks.
+- Run `supabase/calendar_feed.sql` once for calendar subscriptions (Progress → Subscribe in your calendar). Only a SHA-256 hash of each secret link is stored; calendar apps read unfinished tasks through the `studyflow_calendar_feed` function without signing in. Until the file is run, the Progress page says the subscription is not connected.
 - For timetable photos, create an API key at console.anthropic.com (billing required) and add it on Vercel as `ANTHROPIC_API_KEY` (Production). Set a monthly spend limit in the Anthropic console. Photos are sent to Anthropic only to read the text and are not stored by StudyFlow. Without the key the upload form is hidden.
 
 ## 2. Local cloud smoke test
@@ -52,7 +53,7 @@ Missing configuration fails closed: private routes return 503, never the old SQL
 - Verify Tasks & plan, Progress, the legacy `/planner` alias, and status forms with CSP enabled. Inline JavaScript handlers are not allowed.
 - Review Supabase Security Advisor. Confirm RLS on `studyflow_tasks`, no anonymous grants, no extra permissive policies, and no service-role key in Vercel or frontend code.
 - Configure Vercel Firewall rate limits for `/login` and `/register`, provider Auth quotas, spending alerts, and signup monitoring. Provider-side password/signup throttling is essential: process-local or cookie limits would be bypassable and would not protect Supabase's direct Auth API.
-- This version does not integrate CAPTCHA. For a broadly promoted public site, add Supabase-supported CAPTCHA before removing deployment protection; do not enable it without adding the matching client token flow.
+- CAPTCHA (Cloudflare Turnstile, optional but recommended for a public site): in Cloudflare → Turnstile add a widget for your domain (mode "Managed"). Put its **secret key** into Supabase → Authentication → Attack Protection → Enable Captcha protection (provider Turnstile), then set the **site key** on Vercel as `TURNSTILE_SITE_KEY` and redeploy. Do both together: Supabase without the site key rejects every sign-in; the site key without Supabase protection only shows a check that nobody verifies.
 - Select and test a backup/restore policy supported by your database plan. Account deletion/export and operational alerting remain follow-up work.
 
 ## References

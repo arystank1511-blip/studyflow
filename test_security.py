@@ -1,6 +1,7 @@
 """Offline security regression tests. Real Supabase RLS needs the separate SQL test."""
 import base64
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -52,7 +53,59 @@ class CloudSecurityTests(unittest.TestCase):
                 return [{"id": 1, "user_id": ALICE, "title": "Alice private note", "course": "Algorithms",
                          "due_date": "2026-12-31", "priority": "Medium", "status": "To do", "notes": "<script>alert(1)</script>"}]
             return []
+        if path == "/rest/v1/studyflow_calendar_feeds" and method == "GET":
+            return []
         raise AssertionError((method, path))
+
+    def test_confirmed_token_is_not_rechecked_on_every_page(self):
+        def token(exp):
+            payload = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+            return "h." + payload + ".s"
+        fresh = token(int(time.time()) + 3600)
+        user = {"id": ALICE, "email": "student@example.com", "email_confirmed_at": "now"}
+        self.client.set_cookie("sf_access", fresh)
+        with patch("cloud.api", return_value=user) as remote, patch("app.cloud_tasks", return_value=[]):
+            self.client.get("/focus")
+            self.client.get("/focus")
+            self.assertEqual([c.args for c in remote.call_args_list], [("GET", "/auth/v1/user")])
+            # A different token is never served from the remembered check.
+            self.client.set_cookie("sf_access", token(int(time.time()) + 3601))
+            self.client.get("/focus")
+            self.assertEqual(remote.call_count, 2)
+            # After the recheck interval Supabase is asked again.
+            with patch("cloud.time.time", return_value=time.time() + 301):
+                self.client.get("/focus")
+            self.assertEqual(remote.call_count, 3)
+        # A token about to expire is not trusted from memory; it goes to Supabase (and refresh) instead.
+        self.client.set_cookie("sf_access", token(int(time.time()) + 30))
+        with patch("cloud.api", side_effect=CloudError(401)):
+            self.assertEqual(self.client.get("/focus").location, "/login")
+
+    def test_calendar_feed_uses_hash_and_anonymous_rpc(self):
+        token = "a" * 43
+        digest = __import__("hashlib").sha256(token.encode()).hexdigest()
+        row = {"id": 5, "title": "Essay", "course": "Law", "due_date": "2026-12-01", "priority": "High", "notes": ""}
+        with patch("cloud.api", return_value=[row]) as remote:
+            response = app.test_client().get(f"/calendar/feed/{token}.ics")
+        self.assertIn(b"SUMMARY:Essay", response.data)
+        self.assertEqual(remote.call_args.args, ("POST", "/rest/v1/rpc/studyflow_calendar_feed"))
+        self.assertEqual(remote.call_args.kwargs["data"], {"feed_hash": digest})
+        self.assertIsNone(remote.call_args.kwargs.get("token"))
+        with patch("cloud.api", return_value=None):
+            self.assertEqual(app.test_client().get(f"/calendar/feed/{token}.ics").status_code, 404)
+        self.sign_in()
+        calls = []
+        def provider(method, path, **kwargs):
+            if path == "/auth/v1/user":
+                return self.provider(method, path, **kwargs)
+            calls.append((method, path, kwargs.get("params"), kwargs.get("data")))
+            return [] if method == "GET" else None
+        with patch("cloud.api", side_effect=provider), patch("app.cloud_tasks", return_value=[]):
+            self.post("/calendar/subscription", action="create")
+        self.assertEqual([c[0] for c in calls], ["DELETE", "POST"])
+        self.assertEqual(calls[0][2], {"user_id": "eq." + ALICE})
+        self.assertEqual(calls[1][3]["user_id"], ALICE)
+        self.assertRegex(calls[1][3]["token_hash"], r"^[0-9a-f]{64}$")
 
     def test_anonymous_cannot_read_or_write(self):
         with patch("cloud.api") as remote:
@@ -183,6 +236,24 @@ class CloudSecurityTests(unittest.TestCase):
             self.assertEqual(self.client.get("/login/verify").location, "/login/code")
             self.assertEqual(self.client.get("/password/reset").location, "/password/forgot")
             remote.assert_not_called()
+
+    def test_turnstile_token_is_required_and_forwarded(self):
+        self.assertNotIn(b"challenges.cloudflare.com", self.client.get("/login").headers["Content-Security-Policy"].encode())
+        app.config["TURNSTILE_SITE_KEY"] = "0x4AAA-site"
+        response = self.client.get("/login")
+        self.assertIn(b'data-sitekey="0x4AAA-site"', response.data)
+        self.assertIn("https://challenges.cloudflare.com", response.headers["Content-Security-Policy"])
+        with patch("cloud.api") as remote:
+            for path, form in (("/login", {"password": "whatever-password"}), ("/login/code", {}),
+                               ("/password/forgot", {}),
+                               ("/register", {"password": "new-long-password!", "password_confirm": "new-long-password!"})):
+                response = self.post(path, email="student@example.com", **form)
+                self.assertEqual(response.status_code, 400, path)
+                self.assertIn(b"not a robot", response.data)
+            remote.assert_not_called()
+        with patch("cloud.api", return_value={}) as remote:
+            self.post("/login/code", email="student@example.com", **{"cf-turnstile-response": "tok"})
+            self.assertEqual(remote.call_args.kwargs["data"]["gotrue_meta_security"], {"captcha_token": "tok"})
 
     def test_email_code_sign_in(self):
         with patch("cloud.api", return_value={}) as remote:

@@ -5,7 +5,7 @@
 <header class="today-hero">
   <h1 class="hand-date"><time datetime="{{ today }}" data-format="long">{{ today }}</time></h1>
   {% set ratio = (today_done / today_total) if today_total else 0 %}
-  <p class="today-summary">
+  <p class="today-summary" data-live="today">
     {% if today_total %}<span class="today-meter" role="img" aria-label="{{ t('{done} of {total} done today', done=today_done, total=today_total) }}" style="--ratio: {{ ratio }}"></span>{{ t('{done} of {total} done today', done=today_done, total=today_total) }}{% else %}{{ t('Nothing is due today. Plan ahead or take a breath.') }}{% endif %}
   </p>
 </header>
@@ -33,15 +33,15 @@
   <p class="quick-add-preview" id="quick-add-help" aria-live="polite" data-quick-preview>{{ t('Type a task in one line: a date (tomorrow, fri, 25.10), #course and !high are recognised.') }}</p>
 </form>
 
-{% if counts.overdue %}
+<div data-live="overdue">{% if counts.overdue %}
 <div class="overdue-banner" role="status">
   <a href="{{ url_for('index', view='overdue', _anchor='task-workspace') }}">{{ t('{n} overdue', n=counts.overdue) }}</a>
   <form method="post" action="{{ url_for('reschedule_overdue') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">{{ t('Move to today') }}</button></form>
 </div>
-{% endif %}
+{% endif %}</div>
 
 <section class="week-panel unified-week" aria-label="{{ t('Next seven days') }}">
-  <div class="week-grid">{% for item in week %}
+  <div class="week-grid" data-live="week">{% for item in week %}
     <div class="week-day {{ 'today' if item.date == today }} {{ 'selected' if day == item.date }} {{ 'has-tasks' if item.count }}">
       <a class="day-select" href="{{ url_for('index', view='all', day=item.date, _anchor='task-workspace') }}" {% if day == item.date %}aria-current="date"{% endif %} aria-label="{{ t('Show tasks for {date}', date=item.date) }}">
         <span>{{ t(item.label) }}</span><strong>{{ item.number }}</strong><span class="day-count">{{ task_count(item.total) }}</span>
@@ -57,7 +57,7 @@
     <h2 id="task-heading">{% if day %}{{ t('Tasks for') }} <time datetime="{{ day }}">{{ day }}</time>{% else %}{{ t('Your tasks') }}{% endif %}</h2>
     <button class="text-button" type="button" data-open-modal {% if day %}data-task-date="{{ day }}"{% endif %}>{{ t('Add task') }} <svg class="icon-plus" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14 M5 12h14"/></svg></button>
   </div>
-  <nav class="view-tabs" aria-label="{{ t('Task views') }}">
+  <nav class="view-tabs" data-live="views" aria-label="{{ t('Task views') }}">
     {% for key, label in [('active','Active'), ('overdue','Overdue'), ('done','Done'), ('all','All')] %}<a href="{{ url_for('index', view=key, day=day, q=search, course=course, _anchor='task-workspace') }}" {% if view == key %}aria-current="page"{% endif %}>{{ t(label) }} <span>{{ filter_counts[key] }}</span></a>{% endfor %}
   </nav>
   {% if view in ['today', 'week'] %}<p class="scope-note">{{ t('Due today') if view == 'today' else t('Next 7 days') }}</p>{% endif %}
@@ -73,7 +73,7 @@
       {% if filtered %}<a class="text-button" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('Clear filters') }}</a>{% endif %}</div>
     </form>
   </details>
-  {% if tasks %}<div class="work-task-list">{% for task in tasks %}{{ task_card(task, page, filters, today) }}{% endfor %}</div>
-  {% else %}<div class="empty"><h3>{{ t('No matching tasks') if metrics.total else t('A fresh start') }}</h3><p>{{ t('No tasks in this view. Add one or change the filters.') }}</p><button class="primary" type="button" data-open-modal {% if day %}data-task-date="{{ day }}"{% endif %}>{{ t('Add task') }}</button>{% if metrics.total %}<a class="text-button" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('Clear filters · View all tasks') }}</a>{% endif %}</div>{% endif %}
+  <div data-live="tasks">{% if tasks %}<div class="work-task-list">{% for task in tasks %}{{ task_card(task, page, filters, today) }}{% endfor %}</div>
+  {% else %}<div class="empty"><h3>{{ t('No matching tasks') if metrics.total else t('A fresh start') }}</h3><p>{{ t('No tasks in this view. Add one or change the filters.') }}</p><button class="primary" type="button" data-open-modal {% if day %}data-task-date="{{ day }}"{% endif %}>{{ t('Add task') }}</button>{% if metrics.total %}<a class="text-button" href="{{ url_for('index', view='all', _anchor='task-workspace') }}">{{ t('Clear filters · View all tasks') }}</a>{% endif %}</div>{% endif %}</div>
 </section>
 {% endblock %}

@@ -1,3 +1,6 @@
+// Parts of the page can be replaced after a task action (live.js); they register here to be set up again.
+window.StudyFlow = window.StudyFlow || { enhancers: [] };
+const enhance = setup => { window.StudyFlow.enhancers.push(setup); setup(document); };
 const modal = document.getElementById('task-modal');
 const ui = JSON.parse(document.getElementById('ui-strings').textContent);
 const locale = ({ ru: 'ru-RU', kk: 'kk-KZ' })[document.documentElement.lang] || 'en-GB';
@@ -10,10 +13,10 @@ let triggerButton;
 let dirty = Boolean(modal?.dataset.reopen);
 let submitting = false;
 
-function openModal(event) {
+function openModal(button) {
   if (!modal) return;
-  triggerButton = event?.currentTarget ?? document.querySelector('[data-open-modal]');
-  const selectedDate = event?.currentTarget?.dataset.taskDate;
+  triggerButton = button ?? document.querySelector('[data-open-modal]');
+  const selectedDate = button?.dataset.taskDate;
   if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
     taskForm.querySelector('[name="due_date"]').value = selectedDate;
   }
@@ -33,7 +36,10 @@ function closeModal() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
-document.querySelectorAll('[data-open-modal]').forEach(button => button.addEventListener('click', openModal));
+document.addEventListener('click', event => {
+  const opener = event.target.closest('[data-open-modal]');
+  if (opener) openModal(opener);
+});
 document.querySelectorAll('[data-close-modal]').forEach(button => button.addEventListener('click', closeModal));
 modal?.addEventListener('click', event => { if (event.target === modal) closeModal(); });
 document.addEventListener('keydown', event => {
@@ -61,12 +67,12 @@ window.addEventListener('pageshow', () => {
   const button = taskForm?.querySelector('button[type="submit"]');
   if (button) { button.disabled = false; button.textContent = ui.create + ' →'; }
 });
-document.querySelectorAll('time[datetime]').forEach(element => {
+enhance(root => root.querySelectorAll('time[datetime]:not([data-format])').forEach(element => {
   const value = element.getAttribute('datetime');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
   const parsed = new Date(value + 'T12:00:00');
   if (!Number.isNaN(parsed.getTime())) element.textContent = (window.formatStudyDate || (value => value.toLocaleDateString(locale)))(parsed, 'date');
-});
+}));
 if (modal?.dataset.reopen) openModal();
 
 const editor = document.querySelector('[data-editor]');
@@ -85,14 +91,14 @@ window.addEventListener('pageshow', () => {
 const deleteDialog = document.getElementById('delete-dialog');
 let pendingDelete;
 let confirmedDelete;
-document.querySelectorAll('form[data-confirm]').forEach(form => {
-  form.addEventListener('submit', event => {
-    if (confirmedDelete === form) { confirmedDelete = null; return; }
-    event.preventDefault();
-    if (!deleteDialog) return; // Fail closed if the confirmation UI is missing.
-    pendingDelete = form;
-    deleteDialog.showModal();
-  });
+document.addEventListener('submit', event => {
+  const form = event.target.closest('form[data-confirm]');
+  if (!form) return;
+  if (confirmedDelete === form) { confirmedDelete = null; return; }
+  event.preventDefault();
+  if (!deleteDialog) return; // Fail closed if the confirmation UI is missing.
+  pendingDelete = form;
+  deleteDialog.showModal();
 });
 deleteDialog?.querySelector('[data-cancel-delete]').addEventListener('click', () => deleteDialog.close());
 deleteDialog?.addEventListener('close', () => { pendingDelete = null; });
@@ -141,9 +147,9 @@ window.addEventListener('pagereveal', event => quietTransition(event.viewTransit
 window.addEventListener('pageswap', event => quietTransition(event.viewTransition));
 
 // Staggered entrance order for lists.
-document.querySelectorAll('.work-task-list, .course-list, .week-grid').forEach(list => {
+enhance(root => root.querySelectorAll('.work-task-list, .course-list, .week-grid').forEach(list => {
   Array.from(list.children).forEach((item, index) => item.style.setProperty('--i', index));
-});
+}));
 
 // Count percentages up from zero.
 document.querySelectorAll('.completion-overview strong, .course-progress-head > strong').forEach(element => {
@@ -161,23 +167,25 @@ document.querySelectorAll('.completion-overview strong, .course-progress-head > 
   requestAnimationFrame(step);
 });
 
-// One-click completion plays its check animation before the page reloads.
-document.querySelectorAll('.quick-done-form').forEach(form => {
-  form.addEventListener('submit', event => {
-    const card = form.closest('.work-task');
-    if (reduceMotion || !card || form.dataset.animated || card.classList.contains('is-done')) return;
-    event.preventDefault();
-    form.dataset.animated = 'true';
-    card.classList.add('is-completing');
-    form.querySelector('button').disabled = true;
-    setTimeout(() => HTMLFormElement.prototype.submit.call(form), 520);
-  });
+// Send a task form without reloading when live.js is available, otherwise as a normal form.
+const sendForm = form => (window.StudyFlow.send ? window.StudyFlow.send(form) : HTMLFormElement.prototype.submit.call(form));
+
+// One-click completion plays its check animation before the change is sent.
+document.addEventListener('submit', event => {
+  const form = event.target.closest('.quick-done-form');
+  const card = form?.closest('.work-task');
+  if (event.defaultPrevented || reduceMotion || !card || form.dataset.animated || card.classList.contains('is-done')) return;
+  event.preventDefault();
+  form.dataset.animated = 'true';
+  card.classList.add('is-completing');
+  form.querySelector('button').disabled = true;
+  setTimeout(() => sendForm(form), 520);
 });
 
 // Success messages step aside after a few seconds; errors stay until the next action.
-document.querySelectorAll('.flash.success').forEach(message => {
+enhance(root => root.querySelectorAll('.flash.success').forEach(message => {
   setTimeout(() => {
     message.classList.add('is-leaving');
     message.addEventListener('animationend', () => message.remove(), { once: true });
   }, reduceMotion ? 6000 : 4200);
-});
+}));

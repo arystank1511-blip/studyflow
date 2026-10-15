@@ -77,12 +77,50 @@ def authenticated_user(token):
     return {"id": user["id"], "email": user.get("email", "")}
 
 
+# How long a confirmed access token is trusted without asking Supabase again. Every database
+# request still sends the token to Supabase, which checks its signature and expiry under RLS.
+RECHECK_SECONDS = 300
+
+
+def token_digest(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def token_expiry(token):
+    """The exp claim of a token Supabase has already accepted; 0 when it cannot be read."""
+    try:
+        payload = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        return int(claims["exp"])
+    except (IndexError, KeyError, TypeError, ValueError, UnicodeDecodeError):
+        return 0
+
+
+def remember_user(token, user):
+    expires = token_expiry(token)
+    if expires:
+        # The Flask session is signed, so a visitor cannot plant a user here.
+        session["auth_check"] = {"token": token_digest(token), "user": user, "at": int(time.time()), "exp": expires}
+
+
+def remembered_user(token):
+    entry = session.get("auth_check")
+    now = time.time()
+    if (not isinstance(entry, dict) or not isinstance(entry.get("user"), dict)
+            or not secrets.compare_digest(str(entry.get("token", "")), token_digest(token))):
+        return None
+    if now - entry.get("at", 0) >= RECHECK_SECONDS or entry.get("exp", 0) - now < 60:
+        return None  # Re-check, or refresh shortly before the token expires.
+    return entry["user"]
+
+
 def accept_tokens(result):
     if not isinstance(result, dict) or not result.get("access_token") or not result.get("refresh_token"):
         raise CloudError(401)
     g.access_token = result["access_token"]
     g.user = authenticated_user(g.access_token)
     g.new_tokens = (result["access_token"], result["refresh_token"])
+    remember_user(g.access_token, g.user)
 
 
 def load_identity():
@@ -94,7 +132,7 @@ def load_identity():
             abort(403)
         return
     public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
-              "google_login", "auth_callback", "change_language", "health", "service_worker"}
+              "google_login", "auth_callback", "change_language", "health", "service_worker", "calendar_feed"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
@@ -104,7 +142,10 @@ def load_identity():
     try:
         if not token:
             raise CloudError(401)
-        g.user = authenticated_user(token)
+        g.user = remembered_user(token)
+        if g.user is None:
+            g.user = authenticated_user(token)
+            remember_user(token, g.user)
         g.access_token = token
     except CloudError as error:
         if error.status not in (400, 401, 403):
@@ -128,11 +169,12 @@ def secure_response(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    captcha = " https://challenges.cloudflare.com" if current_app.config.get("TURNSTILE_SITE_KEY") else ""
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; "
-        "form-action 'self'; script-src 'self'; script-src-attr 'none'; "
+        f"form-action 'self'; script-src 'self'{captcha}; script-src-attr 'none'; frame-src 'self'{captcha}; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'"
+        f"font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'{captcha}"
     )
     if request.endpoint != "static":
         response.headers["Cache-Control"] = "private, no-store, max-age=0"
@@ -186,12 +228,23 @@ def register_auth(app):
     def page(mode, status=200, **context):
         context.setdefault("email", "")
         return render_template("auth.html", mode=mode, ready=ready(), google=app.config.get("GOOGLE_LOGIN", False),
+                               captcha_key=app.config.get("TURNSTILE_SITE_KEY", ""),
                                error=context.pop("error", None), **context), status
+
+    def with_captcha(data):
+        """Attach the Turnstile token for Supabase to verify; None when it is required but missing."""
+        if not app.config.get("TURNSTILE_SITE_KEY"):
+            return data
+        token = request.form.get("cf-turnstile-response", "").strip()
+        if not token or len(token) > 2048:
+            return None
+        return {**data, "gotrue_meta_security": {"captcha_token": token}}
 
     def start_session(result):
         accept_tokens(result)  # Missing or unverified session => CloudError, fail closed.
         session.clear()
         session["csrf_token"] = secrets.token_hex(32)
+        remember_user(g.access_token, g.user)
         flash("You are signed in.", "success")
         return redirect(url_for("index"))
 
@@ -213,11 +266,13 @@ def register_auth(app):
             return page("login", 400, email=email, error="Enter a valid email address.")
         if not password or len(password.encode("utf-8")) > 72:
             return page("login", 400, email=email, error="Email or password is incorrect.")
+        data = with_captcha({"email": email, "password": password})
+        if data is None:
+            return page("login", 400, email=email, error="Complete the check that you are not a robot.")
         try:
             # Passwords go only to Supabase over HTTPS, never into our
             # database, session, logs, templates, or task metadata.
-            return start_session(api("POST", "/auth/v1/token", params={"grant_type": "password"},
-                                     data={"email": email, "password": password}))
+            return start_session(api("POST", "/auth/v1/token", params={"grant_type": "password"}, data=data))
         except CloudError as error:
             message, status = auth_failure(error, "Email or password is incorrect.")
             return page("login", status, email=email, error=message)
@@ -233,8 +288,11 @@ def register_auth(app):
         problem = password_problem(request.form.get("password", ""), request.form.get("password_confirm", ""))
         if problem:
             return page("register", 400, email=email, error=problem)
+        data = with_captcha({"email": email, "password": request.form["password"]})
+        if data is None:
+            return page("register", 400, email=email, error="Complete the check that you are not a robot.")
         try:
-            result = api("POST", "/auth/v1/signup", data={"email": email, "password": request.form["password"]})
+            result = api("POST", "/auth/v1/signup", data=data)
             if isinstance(result, dict) and result.get("access_token"):
                 return start_session(result)  # Only when the provider has confirmation turned off.
         except CloudError as error:
@@ -256,8 +314,11 @@ def register_auth(app):
             return page("code", 400, email=email, error="Enter a valid email address.")
         if session.get("otp_email") == email and time.time() - session.get("otp_sent_at", 0) < 60:
             return page("code", 429, email=email, error="Wait a minute before requesting another code.")
+        data = with_captcha({"email": email, "create_user": True})
+        if data is None:
+            return page("code", 400, email=email, error="Complete the check that you are not a robot.")
         try:
-            api("POST", "/auth/v1/otp", data={"email": email, "create_user": True})
+            api("POST", "/auth/v1/otp", data=data)
         except CloudError as error:
             message, status = auth_failure(error, "Could not send a code. Please try again later.")
             return page("code", status, email=email, error=message)
@@ -290,8 +351,11 @@ def register_auth(app):
         email = request.form.get("email", "").strip().lower()
         if not valid_email(email):
             return page("forgot", 400, email=email, error="Enter a valid email address.")
+        data = with_captcha({"email": email})
+        if data is None:
+            return page("forgot", 400, email=email, error="Complete the check that you are not a robot.")
         try:
-            api("POST", "/auth/v1/recover", data={"email": email})
+            api("POST", "/auth/v1/recover", data=data)
         except CloudError as error:
             if error.status == 429 or error.status >= 500:
                 message, status = auth_failure(error, "")
@@ -391,6 +455,40 @@ def cloud_sessions(method="GET", data=None, since=None):
     except CloudError as error:
         if error.status == 404:
             raise StudyStorageMissing() from None
+        abort(503)
+
+
+class FeedStorageMissing(Exception):
+    """The calendar-feed table has not been created in Supabase yet."""
+
+
+def cloud_feed(method="GET", token_hash=None):
+    """Read, replace (POST) or remove (DELETE) the signed-in student's calendar link."""
+    if not g.get("user") or not g.get("access_token"):
+        abort(401)
+    path = "/rest/v1/studyflow_calendar_feeds"
+    owner = {"user_id": "eq." + g.user["id"]}
+    try:
+        if method == "GET":
+            return api("GET", path, token=g.access_token, params={**owner, "select": "created_at"})
+        api("DELETE", path, token=g.access_token, params=owner)
+        if method == "POST":
+            api("POST", path, token=g.access_token, data={"user_id": g.user["id"], "token_hash": token_hash},
+                headers={"Prefer": "return=minimal"})
+        return None
+    except CloudError as error:
+        if error.status == 404:
+            raise FeedStorageMissing() from None
+        abort(503)
+
+
+def feed_tasks(token_hash):
+    """Unfinished tasks behind a calendar link, or None for an unknown link. No user session is involved."""
+    try:
+        return api("POST", "/rest/v1/rpc/studyflow_calendar_feed", data={"feed_hash": token_hash})
+    except CloudError as error:
+        if error.status == 404:
+            return None
         abort(503)
 
 

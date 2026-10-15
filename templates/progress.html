@@ -11,4 +11,27 @@
   <div><h2 id="export-heading">{{ t("Take your deadlines with you") }}</h2><p>{{ t("Add unfinished tasks to Google Calendar, Apple Calendar or Outlook with a reminder the day before, or download a full copy of your tasks.") }}</p></div>
   <div class="export-actions"><a class="primary" href="{{ url_for('calendar_export') }}" download>{{ t("Download calendar (.ics)") }}</a><a class="secondary" href="{{ url_for('data_export') }}" download>{{ t("Export tasks (JSON)") }}</a></div>
 </section>
+<section class="workspace-board feed-panel" id="calendar-feed" aria-labelledby="feed-heading">
+  <h2 id="feed-heading">{{ t("Subscribe in your calendar") }}</h2>
+  <p>{{ t("Your calendar app checks StudyFlow every few hours and shows new and moved deadlines with a reminder the day before. Finished tasks disappear on their own.") }}</p>
+  {% if not feed.ready %}
+    <p class="flash error">{{ t("Calendar subscription is not connected yet: the site owner needs to run supabase/calendar_feed.sql in Supabase.") }}</p>
+  {% elif feed_url %}
+    <label class="feed-link" for="feed-url">{{ t("Subscription link") }}
+      <span class="feed-copy"><input id="feed-url" value="{{ feed_url }}" readonly data-copy-source><button class="secondary" type="button" data-copy="#feed-url" data-copied="{{ t('Copied') }}">{{ t("Copy the link") }}</button></span>
+    </label>
+    <p class="feed-warning">{{ t("The link is shown only once. Anyone who has it can see your unfinished tasks, so do not post it publicly.") }}</p>
+    <div class="export-actions"><a class="primary" href="{{ google_feed_url }}" target="_blank" rel="noopener">{{ t("Add to Google Calendar") }}</a><a class="secondary" href="{{ webcal_url }}">{{ t("Open in Apple Calendar or Outlook") }}</a></div>
+  {% elif feed.on %}
+    <p class="feed-status">{{ t("Subscription is on since {date}.", date=feed.since) }}</p>
+  {% endif %}
+  {% if feed.ready %}
+  <form class="export-actions" method="post" action="{{ url_for('calendar_subscription') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if not feed.on %}<button class="primary" name="action" value="create">{{ t("Get a subscription link") }}</button>
+    {% else %}<button class="secondary" name="action" value="create">{{ t("Create a new link") }}</button><button class="text-button" name="action" value="off">{{ t("Turn off") }}</button>{% endif %}
+  </form>
+  {% if feed.on and not feed_url %}<p class="feed-note">{{ t("A new link replaces the old one; calendars that use the old link stop updating.") }}</p>{% endif %}
+  {% endif %}
+</section>
 {% endblock %}
