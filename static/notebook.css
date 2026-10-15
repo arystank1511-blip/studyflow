@@ -126,12 +126,8 @@ label > span { font-weight: 400; color: var(--text-3); }
 .side-nav a:hover { background: var(--ink-soft); color: var(--text); }
 .side-nav a.active { color: var(--ink); font-weight: 700; background: linear-gradient(var(--marker-bg), var(--marker-bg)) no-repeat 12px 70% / calc(100% - 24px) 40%; }
 .nav-icon { flex: 0 0 20px; }
-.mobile-nav-label { display: none; }
 
 .dashboard { display: grid; grid-template-columns: minmax(0, 820px); justify-content: center; align-content: start; min-width: 0; padding: 20px 32px 64px; }
-.account-strip { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; color: var(--text-3); }
-.account-strip span { overflow-wrap: anywhere; }
-.account-strip button { min-height: 44px; padding: 0 12px; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 13px; cursor: pointer; }
 .messages { display: grid; gap: 8px; margin-bottom: 16px; }
 .flash { margin: 0; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 14px; border: 1px solid; background: var(--surface); }
 .flash.success { border-color: color-mix(in srgb, var(--done) 55%, transparent); color: var(--text); }
@@ -449,10 +445,7 @@ label > span { font-weight: 400; color: var(--text-3); }
   .side-nav { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   .side-nav a { flex-direction: column; justify-content: center; gap: 2px; min-height: 54px; padding: 4px; font-size: 12px; }
   .side-nav a.active { box-shadow: none; background: var(--ink-soft); }
-  .desktop-nav-label { display: none; }
-  .mobile-nav-label { display: block; }
   .dashboard { padding: 12px 12px calc(96px + env(safe-area-inset-bottom)); }
-  .account-strip { justify-content: space-between; }
   .hand-date { font-size: 30px; }
   .quick-add-field kbd { display: none; }
   .quick-add-field .primary { padding: 0 14px; }

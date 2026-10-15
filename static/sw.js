@@ -1,7 +1,7 @@
 // StudyFlow service worker: installable app + an offline notice.
 // Pages hold private task data and are sent with no-store, so they are never cached here;
 // only the public design files and the offline page are.
-const CACHE = 'studyflow-static-v6';
+const CACHE = 'studyflow-static-v7';
 const PRECACHE = [
   '/static/notebook.css', '/static/dates.js', '/static/app.js', '/static/study.js', '/static/scan.js', '/static/app-v2.js', '/static/live.js', '/static/theme.js',
   '/static/brand-mark.svg', '/static/manifest.webmanifest', '/static/offline.html',

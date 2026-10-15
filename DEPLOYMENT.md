@@ -21,6 +21,11 @@ StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase man
 
 - Run `supabase/study_sessions.sql` once in the SQL Editor. Until then the Study page says time cannot be saved; nothing else breaks.
 - Run `supabase/calendar_feed.sql` once for calendar subscriptions (Progress → Subscribe in your calendar). Only a SHA-256 hash of each secret link is stored; calendar apps read unfinished tasks through the `studyflow_calendar_feed` function without signing in. Until the file is run, the Progress page says the subscription is not connected.
+- Feature migrations for an existing project, each run once in the SQL Editor **before** deploying the code that uses it (a new project gets the columns from `schema.sql`, but still needs the function files):
+  1. `supabase/exam_flag.sql`: the "Exam" mark on tasks.
+  2. `supabase/delete_account.sql`: lets students delete their own account (a function that can only delete the caller).
+  3. `supabase/steps_repeat.sql`: checklists inside tasks and repeating tasks.
+  4. `supabase/study_groups.sql`: study groups and the weekly ranking (needs `study_sessions.sql`).
 - For timetable photos, create an API key at console.anthropic.com (billing required) and add it on Vercel as `ANTHROPIC_API_KEY` (Production). Set a monthly spend limit in the Anthropic console. Photos are sent to Anthropic only to read the text and are not stored by StudyFlow. Without the key the upload form is hidden.
 
 ## 2. Local cloud smoke test
