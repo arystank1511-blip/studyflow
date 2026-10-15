@@ -57,6 +57,23 @@ class CloudSecurityTests(unittest.TestCase):
             return []
         raise AssertionError((method, path))
 
+    def test_welcome_page_and_robots_are_public(self):
+        with patch("cloud.api") as remote:
+            page = self.client.get("/welcome", headers={"Accept-Language": "ru"})
+            self.assertEqual(page.status_code, 200)
+            text = page.get_data(as_text=True)
+            self.assertIn("Начать бесплатно", text)
+            self.assertIn('href="/register"', text)
+            self.assertIn('property="og:image"', text)
+            robots = self.client.get("/robots.txt").get_data(as_text=True)
+            self.assertIn("Allow: /welcome", robots)
+            self.assertIn("Disallow: /", robots)
+            remote.assert_not_called()
+        # An expired session still goes to sign-in, not to the welcome page.
+        self.client.set_cookie("sf_refresh", "old")
+        with patch("cloud.api", side_effect=CloudError(401)):
+            self.assertEqual(self.client.get("/").location, "/login")
+
     def test_confirmed_token_is_not_rechecked_on_every_page(self):
         def token(exp):
             payload = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
@@ -109,7 +126,8 @@ class CloudSecurityTests(unittest.TestCase):
 
     def test_anonymous_cannot_read_or_write(self):
         with patch("cloud.api") as remote:
-            for path in ("/", "/planner", "/progress", "/focus", "/study", "/schedule", "/tasks/quick/preview", "/calendar.ics", "/export.json", "/tasks/1/edit"):
+            self.assertEqual(self.client.get("/").location, "/welcome")  # First-time visitors see what StudyFlow is.
+            for path in ("/planner", "/progress", "/focus", "/study", "/schedule", "/tasks/quick/preview", "/calendar.ics", "/export.json", "/tasks/1/edit"):
                 self.assertEqual(self.client.get(path).location, "/login")
             for path in ("/tasks", "/tasks/quick", "/schedule/scan", "/schedule/import", "/study/sessions", "/tasks/reschedule-overdue", "/tasks/1/delete", "/tasks/1/status", "/tasks/1/edit"):
                 self.client.get("/login")

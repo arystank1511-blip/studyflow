@@ -132,13 +132,16 @@ def load_identity():
             abort(403)
         return
     public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
-              "google_login", "auth_callback", "change_language", "health", "service_worker", "calendar_feed"}
+              "google_login", "auth_callback", "change_language", "health", "service_worker", "calendar_feed",
+              "welcome", "robots"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
         abort(503)
     token = request.cookies.get("sf_access")
     refresh = request.cookies.get("sf_refresh")
+    if not token and not refresh and request.endpoint == "index" and request.method == "GET":
+        return redirect(url_for("welcome"))
     try:
         if not token:
             raise CloudError(401)

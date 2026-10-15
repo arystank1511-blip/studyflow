@@ -464,6 +464,17 @@ def download(body: str, mimetype: str, filename: str) -> Response:
     return response
 
 
+@app.get("/welcome")
+def welcome():
+    return render_template("welcome.html", today=user_today().isoformat())
+
+
+@app.get("/robots.txt")
+def robots():
+    body = "User-agent: *\nAllow: /welcome\nAllow: /login\nAllow: /register\nDisallow: /\n"
+    return Response(body, mimetype="text/plain")
+
+
 @app.get("/sw.js")
 def service_worker():
     # Served from the root so it may control every page; it caches only public static files.
