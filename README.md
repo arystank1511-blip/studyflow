@@ -103,6 +103,7 @@ Copy `.env.example` to a private `.env` for local cloud configuration. Never com
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`: Supabase project connection (never a service-role key).
 - `ANTHROPIC_API_KEY`: turns on timetable scanning from photos (about 3–4 US cents per photo with `claude-opus-5-5`).
 - `STUDYFLOW_GOOGLE_LOGIN=1`: show "Continue with Google" once the provider is configured in Supabase.
+- `SENTRY_DSN`: send crash reports to Sentry. Reports keep only the error, stack trace (no local variables), route and method.
 - `TURNSTILE_SITE_KEY`: show a Cloudflare Turnstile check on sign-in, sign-up, code and reset forms. Supabase verifies the token with the secret.
 - `STUDYFLOW_TIMEZONE`: optional fallback timezone such as `Asia/Almaty`, used before the browser has reported its own.
 - `STUDYFLOW_ALLOWED_HOSTS`: exact production hostnames; Vercel deployment hostnames are added automatically.
