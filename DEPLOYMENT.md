@@ -26,7 +26,7 @@ StudyFlow forwards passwords and codes only to Supabase over HTTPS; Supabase man
   2. `supabase/delete_account.sql`: lets students delete their own account (a function that can only delete the caller).
   3. `supabase/steps_repeat.sql`: checklists inside tasks and repeating tasks.
   4. `supabase/study_groups.sql`: study groups and the weekly ranking (needs `study_sessions.sql`).
-- For timetable photos, create an API key at console.anthropic.com (billing required) and add it on Vercel as `ANTHROPIC_API_KEY` (Production). Set a monthly spend limit in the Anthropic console. Photos are sent to Anthropic only to read the text and are not stored by StudyFlow. Without the key the upload form is hidden.
+- For timetable photos, create a key in Google AI Studio (aistudio.google.com → API keys; the free tier is enough) and add it on Vercel as `GEMINI_API_KEY` (Production). Photos are sent to Gemini only to read the text and are not stored by StudyFlow; on the free tier Google may use them to improve its models. `GEMINI_MODEL` overrides the default `gemini-3.8-flash`. Without the key the upload form is hidden.
 
 ## 2. Local cloud smoke test
 

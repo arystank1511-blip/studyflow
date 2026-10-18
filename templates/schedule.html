@@ -15,10 +15,10 @@
     </label>
     <input class="sr-only" id="scan-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" required data-scan-input>
     <button class="primary" type="submit" data-scan-submit>{{ t('Read the timetable') }}</button>
-    <p class="scan-note">{{ t('The photo is sent to Claude by Anthropic to read the text, and is not stored by StudyFlow.') }}</p>
+    <p class="scan-note">{{ t('The photo is sent to Google Gemini to read the text and is not stored by StudyFlow. On the free plan Google may use it to improve its models.') }}</p>
   </form>
   {% else %}
-  <div class="empty"><h3>{{ t('Timetable scanning is not connected yet.') }}</h3><p>{{ t('The site owner needs to add an Anthropic API key to turn this on.') }}</p></div>
+  <div class="empty"><h3>{{ t('Timetable scanning is not connected yet.') }}</h3><p>{{ t('The site owner needs to add a Gemini API key to turn this on.') }}</p></div>
   {% endif %}
   <script id="scan-strings" type="application/json">{{ {'reading': t('Reading the timetable… this can take up to a minute.')}|tojson }}</script>
 </section>

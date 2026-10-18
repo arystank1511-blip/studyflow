@@ -29,7 +29,7 @@ An educational portfolio project by Arystan Kabdesh, developed with AI coding as
 - Localized dates, task statuses, validation messages, and deletion confirmation; user-entered task text stays unchanged
 - Keyboard-accessible task dialog, inline validation, and protected POST forms
 - Cloud mode: Supabase PostgreSQL, verified email accounts (password, email code or Google), password reset, account-owned tasks, and logout
-- **Timetable from a photo** (`/schedule`): photograph a university or school timetable; Claude (Anthropic) reads the classes, you correct and tick them, and they become tasks for 1–8 weeks (odd/even weeks supported). Needs `ANTHROPIC_API_KEY`; hidden without it
+- **Timetable from a photo** (`/schedule`): photograph a university or school timetable; Google Gemini reads the classes, you correct and tick them, and they become tasks for 1–8 weeks (odd/even weeks supported). Needs `GEMINI_API_KEY`; hidden without it
 - **Study** (`/study`, inspired by YPT): a stopwatch per subject, today's total, a 12-week "diligence" heatmap, weekly time by subject, a streak, and D-day countdowns for exams found in your tasks. The screen stays awake while it runs. Needs `supabase/study_sessions.sql` in cloud mode
 - **Today** screen: greeting, today's progress ring, overdue count and a one-click "Move to today" for overdue work
 - **Quick add** in one line: `Эссе пт 18:00 !высокий #философия` → date, priority, course and time are recognised (RU/EN); a live preview shows what will be saved. Press `/` to jump there, `n` for the full form
@@ -101,7 +101,7 @@ Copy `.env.example` to a private `.env` for local cloud configuration. Never com
 - `STUDYFLOW_DEBUG=1`: opt in to the local debugger and reloader. Disabled by default.
 - `STUDYFLOW_MODE=cloud`: enable Supabase authentication and cloud storage.
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`: Supabase project connection (never a service-role key).
-- `ANTHROPIC_API_KEY`: turns on timetable scanning from photos (about 3–4 US cents per photo with `claude-opus-5-5`).
+- `GEMINI_API_KEY`: turns on timetable scanning from photos with Google Gemini (`gemini-3.8-flash`, free tier available).
 - `STUDYFLOW_GOOGLE_LOGIN=1`: show "Continue with Google" once the provider is configured in Supabase.
 - `SENTRY_DSN`: send crash reports to Sentry. Reports keep only the error, stack trace (no local variables), route and method.
 - `TURNSTILE_SITE_KEY`: show a Cloudflare Turnstile check on sign-in, sign-up, code and reset forms. Supabase verifies the token with the secret.
