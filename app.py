@@ -17,10 +17,12 @@ from flask import Flask, Response, abort, send_from_directory, flash, g, has_req
 from i18n import current_language, t, task_count
 from quick_add import parse as parse_quick_add
 import monitoring
+import push
 import schedule_scan
 from dotenv import load_dotenv
-from cloud import (FeedStorageMissing, GroupsMissing, StudyStorageMissing, cloud_feed, cloud_sessions, cloud_tasks, feed_tasks,
-                   group_rpc, register_auth, valid_config)
+from cloud import (MAX_DEVICES, CloudError, FeedStorageMissing, GroupsMissing, PushStorageMissing, StudyStorageMissing, cloud_feed,
+                   cloud_push, cloud_sessions, cloud_tasks, feed_tasks, group_rpc, push_digest, push_forget, register_auth,
+                   valid_config)
 from werkzeug.exceptions import SecurityError
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -215,6 +217,7 @@ def form_context():
         "task_form": session.pop("task_draft", {}),
         "task_errors": session.pop("task_errors", {}),
         "undo": shown_undo(),
+        "push_key": push.public_key() if push.enabled() else "",
     }
 
 
@@ -250,17 +253,24 @@ def workspace_filters():
     return {key: request.args[key] for key in ("status", "q", "view", "course", "day") if key in request.args}
 
 
-def user_now() -> datetime:
-    """Now in the student's timezone (browser cookie, then STUDYFLOW_TIMEZONE, then server)."""
+def zone_name() -> str | None:
+    """The student's timezone name (browser cookie, then STUDYFLOW_TIMEZONE), if it is a real one."""
     candidates = [unquote(request.cookies.get("studyflow_tz", ""))] if has_request_context() else []
     for name in [*candidates, DEFAULT_TIMEZONE]:
         if not name or len(name) > 64 or not re.fullmatch(r"[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+)*", name):
             continue
         try:
-            return datetime.now(ZoneInfo(name))
+            ZoneInfo(name)
+            return name
         except (ZoneInfoNotFoundError, ValueError):
             continue
-    return datetime.now()
+    return None
+
+
+def user_now() -> datetime:
+    """Now in the student's timezone (browser cookie, then STUDYFLOW_TIMEZONE, then server)."""
+    name = zone_name()
+    return datetime.now(ZoneInfo(name)) if name else datetime.now()
 
 
 def user_today() -> date:
@@ -351,6 +361,15 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS study_sessions_day ON study_sessions(day);
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                language TEXT NOT NULL,
+                timezone TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS calendar_feed (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 token_hash TEXT NOT NULL,
@@ -515,6 +534,102 @@ def calendar_subscription():
     else:
         flash("Calendar subscription turned off. The old link no longer works.", "success")
     return redirect(url_for("progress", _anchor="calendar-feed"))
+
+
+@app.post("/push/subscribe")
+def push_subscribe():
+    if not push.enabled():
+        abort(404)
+    endpoint, p256dh, auth = (request.form.get(key, "").strip() for key in ("endpoint", "p256dh", "auth"))
+    if not push.valid_subscription(endpoint, p256dh, auth):
+        return {"ok": False, "error": "invalid"}, 400
+    row = {"endpoint": endpoint, "p256dh": p256dh, "auth": auth,
+           "language": g.get("language", "ru") if g.get("language") in LANGUAGES else "ru", "timezone": zone_name() or "Asia/Almaty"}
+    if app.config["CLOUD_MODE"]:
+        try:
+            if not cloud_push("POST", row, endpoint):
+                return {"ok": False, "error": "limit"}, 400
+        except PushStorageMissing:
+            return {"ok": False, "error": "storage"}, 503
+    else:
+        db = get_db()
+        db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        if db.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0] >= MAX_DEVICES:
+            return {"ok": False, "error": "limit"}, 400
+        db.execute("INSERT INTO push_subscriptions (endpoint, p256dh, auth, language, timezone, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                   (*row.values(), datetime.now(timezone.utc).isoformat()))
+        db.commit()
+    return {"ok": True}
+
+
+@app.post("/push/unsubscribe")
+def push_unsubscribe():
+    endpoint = request.form.get("endpoint", "").strip()
+    if not endpoint or len(endpoint) > 1000:
+        return {"ok": False}, 400
+    if app.config["CLOUD_MODE"]:
+        try:
+            cloud_push("DELETE", endpoint=endpoint)
+        except PushStorageMissing:
+            return {"ok": False, "error": "storage"}, 503
+    else:
+        get_db().execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        get_db().commit()
+    return {"ok": True}
+
+
+def local_push_digest():
+    db = get_db()
+    rows = []
+    for device in db.execute("SELECT * FROM push_subscriptions").fetchall():
+        try:
+            today = datetime.now(ZoneInfo(device["timezone"])).date().isoformat()
+        except (ZoneInfoNotFoundError, ValueError):
+            today = date.today().isoformat()
+        open_tasks = db.execute("SELECT title, due_date, is_exam FROM tasks WHERE status != 'Done'").fetchall()
+        exams = sorted((task for task in open_tasks if task["is_exam"] and today <= task["due_date"] <= (date.fromisoformat(today) + timedelta(days=7)).isoformat()),
+                       key=lambda task: task["due_date"])
+        rows.append({"endpoint": device["endpoint"], "p256dh": device["p256dh"], "auth": device["auth"], "language": device["language"],
+                     "today": sum(task["due_date"] == today for task in open_tasks),
+                     "overdue": sum(task["due_date"] < today for task in open_tasks),
+                     "exam_title": exams[0]["title"] if exams else None,
+                     "exam_days": (date.fromisoformat(exams[0]["due_date"]) - date.fromisoformat(today)).days if exams else None})
+    return rows
+
+
+@app.get("/cron/reminders")
+def cron_reminders():
+    """Run by Vercel Cron every morning with "Authorization: Bearer <CRON_SECRET>"."""
+    secret = os.environ.get("CRON_SECRET", "").strip()
+    given = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not secret or not push.enabled() or not secrets.compare_digest(given.encode(), secret.encode()):
+        abort(404)
+    if app.config["CLOUD_MODE"]:
+        try:
+            rows = push_digest(secret)
+        except CloudError:
+            abort(503)
+    else:
+        rows = local_push_digest()
+    counts = {"sent": 0, "gone": 0, "failed": 0, "quiet": 0}
+    for row in rows:
+        body = push.message(row.get("language", "ru"), int(row.get("today") or 0), int(row.get("overdue") or 0),
+                            row.get("exam_title"), row.get("exam_days"))
+        if not body:
+            counts["quiet"] += 1
+            continue
+        result = push.send(row, body)
+        counts[result] += 1
+        if result == "gone":
+            if app.config["CLOUD_MODE"]:
+                try:
+                    push_forget(secret, row["endpoint"])
+                except CloudError:
+                    pass
+            else:
+                get_db().execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (row["endpoint"],))
+                get_db().commit()
+    return counts
 
 
 @app.get("/calendar/feed/<token>.ics")
