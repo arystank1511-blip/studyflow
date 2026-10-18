@@ -37,11 +37,10 @@ DEFAULT_TIMEZONE = os.environ.get("STUDYFLOW_TIMEZONE", "")
 allowed_hosts = [host.strip() for host in os.environ.get("STUDYFLOW_ALLOWED_HOSTS", "").split(",") if host.strip()]
 allowed_hosts += [os.environ[key] for key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL") if os.environ.get(key)]
 
-# On Vercel, build.py copies static/ to public/static/, which the CDN serves; Flask must not
-# answer those URLs itself (each request would wake the Python function). Locally Flask serves them.
-app = Flask(__name__, static_folder=None if ON_VERCEL else "static")
-if ON_VERCEL:
-    app.add_url_rule("/static/<path:filename>", endpoint="static", build_only=True)
+# Vercel routes /static/* to this function, so Flask serves the files; versioned URLs are then
+# cached for a year by browsers and by Vercel's CDN (see static_cache below), so the function
+# answers each file version only once.
+app = Flask(__name__)
 STATIC_DIR = BASE_DIR / "static"
 _asset_versions: dict[str, str] = {}
 
@@ -61,6 +60,17 @@ def versioned_static(endpoint, values):
             _asset_versions[name] = ""
     if _asset_versions[name]:
         values["v"] = _asset_versions[name]
+
+
+@app.after_request
+def static_cache(response):
+    if request.endpoint == "static" and response.status_code == 200:
+        if request.args.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Vercel-CDN-Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 app.config.update(
     SECRET_KEY=SECRET_KEY or secrets.token_hex(32),
     DATABASE=os.environ.get("STUDYFLOW_DATABASE", str(DATABASE)),

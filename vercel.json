@@ -3,17 +3,5 @@
   "framework": "flask",
   "regions": ["fra1"],
   "buildCommand": "python build.py",
-  "functions": { "app.py": { "maxDuration": 60 } },
-  "headers": [
-    {
-      "source": "/static/(.*)",
-      "has": [{ "type": "query", "key": "v" }],
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-    },
-    {
-      "source": "/static/(.*)",
-      "missing": [{ "type": "query", "key": "v" }],
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
-    }
-  ]
+  "functions": { "app.py": { "maxDuration": 60 } }
 }
