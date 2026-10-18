@@ -1,7 +1,7 @@
-"""Read a photo of a university or school timetable with Claude and return the classes.
+"""Read a photo of a university or school timetable with Google Gemini and return the classes.
 
 The model only extracts what it sees; the student reviews every row before any task
-is created. Needs ANTHROPIC_API_KEY on the server; without it the feature stays hidden.
+is created. Needs GEMINI_API_KEY on the server; without it the feature stays hidden.
 """
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ import json
 import os
 import re
 
+import httpx
 
-MODEL = "claude-opus-5-5"
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+MODEL = "gemini-3.8-flash"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_CLASSES = 80
 KINDS = ("lecture", "practice", "lab", "seminar", "other")
@@ -70,7 +72,7 @@ class ScanError(Exception):
 
 
 def available() -> bool:
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(os.environ.get("GEMINI_API_KEY", "").strip())
 
 
 def image_type(data: bytes) -> str | None:
@@ -120,37 +122,34 @@ def scan(data: bytes) -> dict:
     if not available():
         raise ScanError("Timetable scanning is not connected yet.")
 
-    # Imported here: the SDK takes seconds to load, and every other page would pay for it on a cold start.
-    import anthropic
-
-    client = anthropic.Anthropic(timeout=50.0, max_retries=1)
+    body = {
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [
+            {"inline_data": {"mime_type": media_type, "data": base64.standard_b64encode(data).decode("ascii")}},
+            {"text": "Extract the timetable from this photo."},
+        ]}],
+        "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": SCHEMA,
+                             "temperature": 0, "maxOutputTokens": 16000},
+    }
+    model = os.environ.get("GEMINI_MODEL", "").strip() or MODEL
     try:
-        response = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=16000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            system=SYSTEM_PROMPT,
-            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type,
-                                                 "data": base64.standard_b64encode(data).decode("ascii")}},
-                    {"type": "text", "text": "Extract the timetable from this photo."},
-                ],
-            }],
-        )
-    except anthropic.RateLimitError:
-        raise ScanError("Too many photos at once. Try again in a minute.") from None
-    except (anthropic.APIConnectionError, anthropic.APITimeoutError):
+        response = httpx.post(API_URL.format(model=model), json=body, timeout=httpx.Timeout(50, connect=10),
+                              headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"].strip()})
+    except httpx.HTTPError:
         raise ScanError("The photo could not be read right now. Try again later.") from None
-    except anthropic.APIStatusError:
-        raise ScanError("The photo could not be read right now. Try again later.") from None
+    if response.status_code == 429:
+        raise ScanError("Too many photos at once. Try again in a minute.")
+    if response.status_code != 200:
+        raise ScanError("The photo could not be read right now. Try again later.")
 
-    if response.stop_reason in ("refusal", "max_tokens"):
+    try:
+        candidate = (response.json().get("candidates") or [{}])[0]
+        parts = (candidate.get("content") or {}).get("parts") or []
+        text = "".join(part.get("text", "") for part in parts if not part.get("thought"))
+    except (ValueError, AttributeError, TypeError):
+        text, candidate = "", {}
+    if candidate.get("finishReason") not in (None, "STOP") or not text:
         raise ScanError("The photo could not be read. Try a clearer, straight photo of the timetable.")
-    text = next((block.text for block in response.content if block.type == "text"), "")
     try:
         return clean(json.loads(text))
     except (ValueError, TypeError, AttributeError):

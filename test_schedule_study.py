@@ -55,16 +55,51 @@ class ScheduleAndStudyTests(unittest.TestCase):
             schedule_scan.scan(b"%PDF-1.4 not an image")
         with self.assertRaises(schedule_scan.ScanError):
             schedule_scan.scan(JPEG + b"0" * schedule_scan.MAX_IMAGE_BYTES)
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
             with self.assertRaises(schedule_scan.ScanError):
                 schedule_scan.scan(JPEG)
 
+    def test_scan_asks_gemini_for_json_and_parses_the_answer(self):
+        from unittest.mock import MagicMock
+        answer = {"classes": [{"weekday": 1, "start": "8:30", "end": "9:50", "course": "Физика", "kind": "lab",
+                               "room": "214", "teacher": "", "parity": "odd"}], "warnings": ""}
+        reply = MagicMock(status_code=200)
+        reply.json.return_value = {"candidates": [{"finishReason": "STOP", "content": {"parts": [
+            {"text": "thinking...", "thought": True}, {"text": json.dumps(answer, ensure_ascii=False)}]}}]}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": ""}), patch("httpx.post", return_value=reply) as post:
+            result = schedule_scan.scan(JPEG)
+        self.assertEqual(result["classes"][0]["start"], "08:30")
+        self.assertEqual(result["classes"][0]["parity"], "odd")
+        url = post.call_args.args[0]
+        body = post.call_args.kwargs["json"]
+        self.assertIn("/models/gemini-3.8-flash:generateContent", url)
+        self.assertEqual(post.call_args.kwargs["headers"], {"x-goog-api-key": "test-key"})
+        self.assertNotIn("test-key", url)  # The key never goes into the URL, so it cannot leak into logs.
+        self.assertEqual(body["contents"][0]["parts"][0]["inline_data"]["mime_type"], "image/jpeg")
+        self.assertEqual(body["generationConfig"]["responseMimeType"], "application/json")
+        self.assertIs(body["generationConfig"]["responseJsonSchema"], schedule_scan.SCHEMA)
+
+    def test_scan_turns_gemini_failures_into_friendly_errors(self):
+        from unittest.mock import MagicMock
+        def reply(status, payload=None):
+            response = MagicMock(status_code=status)
+            response.json.return_value = payload or {}
+            return response
+        cases = [(reply(429), "Too many photos"), (reply(403), "right now"),
+                 (reply(200, {"candidates": [{"finishReason": "SAFETY", "content": {"parts": []}}]}), "clearer"),
+                 (reply(200, {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "not json"}]}}]}), "clearer")]
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            for response, message in cases:
+                with patch("httpx.post", return_value=response), self.assertRaises(schedule_scan.ScanError) as error:
+                    schedule_scan.scan(JPEG)
+                self.assertIn(message, str(error.exception))
+
     # ---------- pages and import ----------
     def test_schedule_page_hides_upload_without_key(self):
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
             page = self.client.get("/schedule").data
         self.assertNotIn(b'enctype="multipart/form-data"', page)
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             self.assertIn(b'enctype="multipart/form-data"', self.client.get("/schedule").data)
 
     def test_photo_upload_shows_review_and_limits_size(self):
