@@ -1,7 +1,7 @@
 // StudyFlow service worker: installable app + an offline notice.
 // Pages hold private task data and are sent with no-store, so they are never cached here;
 // only the public design files and the offline page are.
-const CACHE = 'studyflow-static-v8';
+const CACHE = 'studyflow-static-v9';
 const PRECACHE = [
   '/static/notebook.css', '/static/dates.js', '/static/app.js', '/static/study.js', '/static/scan.js', '/static/app-v2.js', '/static/live.js', '/static/theme.js',
   '/static/brand-mark.svg', '/static/manifest.webmanifest', '/static/offline.html',
@@ -37,4 +37,28 @@ self.addEventListener('fetch', event => {
       return cached || network;
     }));
   }
+});
+
+// Morning reminder sent by /cron/reminders. The text arrives encrypted for this device.
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'StudyFlow', {
+    body: data.body || '',
+    icon: '/static/icon-192.png',
+    badge: '/static/icon-192.png',
+    tag: 'studyflow-morning',
+    data: { url: data.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin);
+  if (url.origin !== self.location.origin) return;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windows => {
+    const open = windows.find(client => new URL(client.url).origin === self.location.origin);
+    if (open) return open.navigate(url.href).then(client => (client || open).focus());
+    return self.clients.openWindow(url.href);
+  }));
 });

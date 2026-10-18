@@ -133,7 +133,7 @@ def load_identity():
         return
     public = {"static", "login", "register", "login_code", "verify_login", "forgot_password", "reset_password",
               "google_login", "auth_callback", "change_language", "health", "service_worker", "calendar_feed",
-              "welcome", "robots"}
+              "welcome", "robots", "cron_reminders"}
     if request.endpoint in public or request.endpoint is None:
         return
     if not current_app.config["CLOUD_READY"]:
@@ -502,6 +502,44 @@ def group_rpc(name, data=None):
         if error.status in (400, 409):
             return None, error.status  # A limit inside the function (too many groups, group full).
         abort(503)
+
+
+class PushStorageMissing(Exception):
+    """The push-subscription table has not been created in Supabase yet."""
+
+
+MAX_DEVICES = 10
+
+
+def cloud_push(method, row=None, endpoint=None):
+    """List (GET), add (POST) or remove (DELETE) the signed-in student's devices. POST returns False at the limit."""
+    if not g.get("user") or not g.get("access_token"):
+        abort(401)
+    path = "/rest/v1/studyflow_push_subscriptions"
+    owner = {"user_id": "eq." + g.user["id"]}
+    try:
+        if method == "GET":
+            return api("GET", path, token=g.access_token, params={**owner, "select": "endpoint"})
+        if endpoint is not None:
+            api("DELETE", path, token=g.access_token, params={**owner, "endpoint": "eq." + endpoint})
+        if method == "POST":
+            if len(api("GET", path, token=g.access_token, params={**owner, "select": "id"}) or []) >= MAX_DEVICES:
+                return False
+            api("POST", path, token=g.access_token, data={**row, "user_id": g.user["id"]}, headers={"Prefer": "return=minimal"})
+        return True
+    except CloudError as error:
+        if error.status == 404:
+            raise PushStorageMissing() from None
+        abort(503)
+
+
+def push_digest(cron_secret):
+    """Per device: what the morning notification should say. Called without a user session."""
+    return api("POST", "/rest/v1/rpc/studyflow_push_digest", data={"cron_secret": cron_secret}) or []
+
+
+def push_forget(cron_secret, endpoint):
+    api("POST", "/rest/v1/rpc/studyflow_push_forget", data={"cron_secret": cron_secret, "dead_endpoint": endpoint})
 
 
 class FeedStorageMissing(Exception):

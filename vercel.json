@@ -3,5 +3,6 @@
   "framework": "flask",
   "regions": ["fra1"],
   "buildCommand": "python build.py",
-  "functions": { "app.py": { "maxDuration": 60 } }
+  "functions": { "app.py": { "maxDuration": 60 } },
+  "crons": [{ "path": "/cron/reminders", "schedule": "0 3 * * *" }]
 }

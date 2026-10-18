@@ -11,6 +11,21 @@
   <div><h2 id="export-heading">{{ t("Take your deadlines with you") }}</h2><p>{{ t("Add unfinished tasks to Google Calendar, Apple Calendar or Outlook with a reminder the day before, or download a full copy of your tasks.") }}</p></div>
   <div class="export-actions"><a class="primary" href="{{ url_for('calendar_export') }}" download>{{ t("Download calendar (.ics)") }}</a><a class="secondary" href="{{ url_for('data_export') }}" download>{{ t("Export tasks (JSON)") }}</a></div>
 </section>
+{% if push_key %}
+<section class="workspace-board push-panel" id="reminders" aria-labelledby="push-heading" data-push data-key="{{ push_key }}">
+  <h2 id="push-heading">{{ t("Morning reminders") }}</h2>
+  <p>{{ t("At 8:00 this phone or computer shows what is due today, what is overdue and the nearest exam. Nothing is sent on an empty day.") }}</p>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="push-row"><button class="primary" type="button" data-push-toggle hidden>{{ t("Turn on reminders") }}</button><p class="push-status" data-push-status role="status">{{ t("Checking this device…") }}</p></div>
+  <script id="push-strings" type="application/json">{{ {'turnOn': t('Turn on reminders'), 'turnOff': t('Turn off on this device'),
+    'on': t('Reminders are on for this device.'), 'off': t('Reminders are off for this device.'),
+    'denied': t('Notifications are blocked for this site. Allow them in the browser settings, then reload the page.'),
+    'ios': t('On iPhone, first add StudyFlow to the Home Screen (Share → Add to Home Screen), then open it from there.'),
+    'unsupported': t('This browser cannot show reminders.'), 'failed': t('Could not change reminders. Check your connection and try again.'),
+    'limit': t('Reminders are already on for 10 devices. Turn them off on one of them first.'),
+    'storage': t('Reminders are not connected yet: the site owner needs to run supabase/push_reminders.sql in Supabase.')}|tojson }}</script>
+</section>
+{% endif %}
 <section class="workspace-board feed-panel" id="calendar-feed" aria-labelledby="feed-heading">
   <h2 id="feed-heading">{{ t("Subscribe in your calendar") }}</h2>
   <p>{{ t("Your calendar app checks StudyFlow every few hours and shows new and moved deadlines with a reminder the day before. Finished tasks disappear on their own.") }}</p>
