@@ -10,7 +10,6 @@ import json
 import os
 import re
 
-import anthropic
 
 MODEL = "claude-opus-5-5"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -120,6 +119,9 @@ def scan(data: bytes) -> dict:
         raise ScanError("The photo is too large. Use one under 5 MB.")
     if not available():
         raise ScanError("Timetable scanning is not connected yet.")
+
+    # Imported here: the SDK takes seconds to load, and every other page would pay for it on a cold start.
+    import anthropic
 
     client = anthropic.Anthropic(timeout=50.0, max_retries=1)
     try:

@@ -37,7 +37,30 @@ DEFAULT_TIMEZONE = os.environ.get("STUDYFLOW_TIMEZONE", "")
 allowed_hosts = [host.strip() for host in os.environ.get("STUDYFLOW_ALLOWED_HOSTS", "").split(",") if host.strip()]
 allowed_hosts += [os.environ[key] for key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL") if os.environ.get(key)]
 
-app = Flask(__name__)
+# On Vercel, build.py copies static/ to public/static/, which the CDN serves; Flask must not
+# answer those URLs itself (each request would wake the Python function). Locally Flask serves them.
+app = Flask(__name__, static_folder=None if ON_VERCEL else "static")
+if ON_VERCEL:
+    app.add_url_rule("/static/<path:filename>", endpoint="static", build_only=True)
+STATIC_DIR = BASE_DIR / "static"
+_asset_versions: dict[str, str] = {}
+
+
+@app.url_defaults
+def versioned_static(endpoint, values):
+    """Add ?v=<content hash> to static URLs, so browsers may cache them for a year and still get every change."""
+    if endpoint != "static" or "filename" not in values or "v" in values:
+        return
+    name = values["filename"]
+    if name not in _asset_versions:
+        path = (STATIC_DIR / name).resolve()
+        try:
+            path.relative_to(STATIC_DIR)
+            _asset_versions[name] = hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+        except (OSError, ValueError):
+            _asset_versions[name] = ""
+    if _asset_versions[name]:
+        values["v"] = _asset_versions[name]
 app.config.update(
     SECRET_KEY=SECRET_KEY or secrets.token_hex(32),
     DATABASE=os.environ.get("STUDYFLOW_DATABASE", str(DATABASE)),
