@@ -478,5 +478,32 @@ class StudyFlowTests(unittest.TestCase):
         self.assertEqual(set(data["tasks"][0]), {"id", "title", "course", "due_date", "priority", "status", "notes", "created_at", "is_exam", "repeat", "steps"})
 
 
+class StaticAssetTests(unittest.TestCase):
+    def test_static_urls_carry_a_content_version(self):
+        import re as _re
+        page = app.test_client().get("/welcome").get_data(as_text=True)
+        urls = _re.findall(r'(?:href|src)="(/static/[^"]+)"', page)
+        self.assertTrue(urls)
+        for url in urls:
+            self.assertRegex(url, r"\?v=[0-9a-f]{10}$")
+
+    def test_vercel_build_leaves_static_files_to_the_cdn(self):
+        import os
+        import subprocess
+        import sys
+        code = "\n".join([
+            "from app import app",
+            "from flask import url_for",
+            "with app.test_request_context('/'):",
+            "    print(url_for('static', filename='notebook.css'))",
+            "print(app.test_client().get('/static/notebook.css').status_code)",
+        ])
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                                env={**os.environ, "VERCEL": "1"}, cwd=str(Path(__file__).parent))
+        url, status = result.stdout.split()
+        self.assertRegex(url, r"^/static/notebook\.css\?v=[0-9a-f]{10}$")
+        self.assertNotEqual(status, "200")  # Flask does not serve it; the CDN does.
+
+
 if __name__ == "__main__":
     unittest.main()
