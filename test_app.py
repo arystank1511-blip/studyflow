@@ -487,22 +487,17 @@ class StaticAssetTests(unittest.TestCase):
         for url in urls:
             self.assertRegex(url, r"\?v=[0-9a-f]{10}$")
 
-    def test_vercel_build_leaves_static_files_to_the_cdn(self):
-        import os
-        import subprocess
-        import sys
-        code = "\n".join([
-            "from app import app",
-            "from flask import url_for",
-            "with app.test_request_context('/'):",
-            "    print(url_for('static', filename='notebook.css'))",
-            "print(app.test_client().get('/static/notebook.css').status_code)",
-        ])
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                                env={**os.environ, "VERCEL": "1"}, cwd=str(Path(__file__).parent))
-        url, status = result.stdout.split()
-        self.assertRegex(url, r"^/static/notebook\.css\?v=[0-9a-f]{10}$")
-        self.assertNotEqual(status, "200")  # Flask does not serve it; the CDN does.
+    def test_versioned_static_files_are_cached_for_a_year(self):
+        client = app.test_client()
+        page = client.get("/welcome").get_data(as_text=True)
+        import re as _re
+        url = _re.search(r'href="(/static/notebook\.css\?v=[0-9a-f]{10})"', page).group(1)
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Cache-Control"], "public, max-age=31536000, immutable")
+        self.assertIn("immutable", response.headers["Vercel-CDN-Cache-Control"])
+        self.assertEqual(client.get("/static/notebook.css").headers["Cache-Control"], "public, max-age=3600")
+        self.assertIn("no-store", client.get("/welcome").headers.get("Cache-Control", "no-store"))
 
 
 if __name__ == "__main__":
